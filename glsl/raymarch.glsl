@@ -7,9 +7,10 @@ precision mediump int;
 
 #define MANDELBULB 0
 #define MANDELBOX 1
-//#define FRACTALTYPE MANDELBULB
-#define FRACTALTYPE -1
-
+#define FRACTALTYPE MANDELBULB
+//#define FRACTALTYPE -1
+#define MAX_RAY_STEPS 256
+#define SPREAD vec3(512.0, 0.0, 512.0)
 /*
    Based on tutorial at:
    http://www.geeks3d.com/20130524/building-worlds-with-distance-functions-in-glsl-raymarching-glslhacker-tutorial-opengl/
@@ -131,6 +132,15 @@ float noise( vec3 x )
                    mix( hash(n+170.0), hash(n+171.0),f.x),f.y),f.z);
 }
 
+float noise2d(in vec2 x)
+{
+    vec2 p = floor(x);
+    vec2 f = fract(x);
+    f = f*f*(3.0-2.0*f);
+    float n = p.x + p.y*157.0;
+    return mix(mix(hash(n+0.0), hash(n+1.0),f.x), mix(hash(n+157.0), hash(n+158.0),f.x),f.y);
+}
+
 float sd_plane(in vec3 p, in vec3 n, in float o) {
     return dot(p, n) + o; 
 }
@@ -168,7 +178,7 @@ vec2 obj_cylinder( vec3 p, vec3 c ) {
 vec2 obj_capsule(vec3 p, vec3 a, vec3 b, float r ) {
     vec3 pa = p - a, ba = b - a;
     float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
-    return vec2(length( pa - ba*h ) - r, 3.0);
+    return vec2(length( pa - ba*h ) - r, 8.0);
 }
 
 
@@ -216,6 +226,10 @@ vec2 op_sblend(vec3 p, vec2 a, vec2 b) {
     float sm = smin(a.x, b.x, blend_coef);
     float c = smin(a.y, b.y, blend_coef);
     return vec2(sm, c);
+}
+
+vec3 op_rep(vec3 p, vec3 spread) {
+    return mod(p+spread*0.5, spread) - spread*0.5;
 }
 
 vec2 obj_sine(vec3 p) {
@@ -367,7 +381,7 @@ vec2 obj_tetrahedron(in vec3 p, in float s) {
     float d = min(min(min(p1, p2), p3), p4);
     return vec2(-d, 1.0);
 */
-    return vec2(sd_tetra(p/s) * s, 4.0);
+    return vec2(sd_tetra(p/s) * s, 7.0);
 }
 
 float sd_mandelbulb(in vec3 pos, out float AO) {
@@ -532,6 +546,48 @@ void rY(inout vec3 p, float a) {
 	p.z = -s * q.x + c * q.z;
 }
 
+vec2 obj_boxsphere_perms(in vec3 p) {
+    float yoff = 30.0;
+    return
+        op_union(
+            op_union(
+                obj_floor(p),
+                op_union(
+                    op_union(
+                        op_sub(
+                             obj_round_box(p-vec3(0.0, yoff, 0.0)),
+                             obj_sphere(p-vec3(0.0, yoff, 0.0), 32.0)
+                        ),
+                        op_sub(
+                             obj_sphere(p-vec3(100.0, yoff, 0.0), 32.0),
+                             obj_round_box(p-vec3(100.0, yoff, 0.0))
+                        )
+                    ),
+                    op_union(
+                        obj_sphere(p-vec3(-100.0, yoff, 0.0), 32.0),
+                        obj_round_box(p-vec3(-100.0, yoff, 0.0))
+                    )
+                )
+            ),
+            op_intersect(
+                obj_sphere(p-vec3(-200.0, yoff, 0.0), 32.0),
+                obj_round_box(p-vec3(-200.0, yoff, 0.0))
+            )
+        )
+    ;
+}
+
+vec2 obj_tetra_caps(in vec3 p) {
+    return
+        op_union(
+          obj_floor(p),
+          //op_sblend(p,
+          op_union(
+            obj_tetrahedron(p-vec3(0.0,20.0,0.0), 4.0),
+            obj_capsule(p, vec3(20.5, 20.0, 0.0), vec3(-20.5, 20.0, 0.0), 10.0 )))  ;
+}
+
+
 vec2 distance_to_obj(in vec3 p) {
 //    return op_union(obj_floor(p) + vec2(sin(p.x) + sin(p.y) + sin(p.z), 0.0),
 //    return op_union(obj_floor(p),
@@ -606,8 +662,7 @@ vec2 distance_to_obj(in vec3 p) {
     //p = rotate_y(p, framecount * 0.01);
 #if FRACTALTYPE == MANDELBULB
 //    return obj_invertedgrid(p);
-    //p.x = mod(p.x+200.0, 400.0) - 200.0;
-
+    p = op_rep(p, SPREAD);
     return op_sblend(p,
             op_sblend(p, obj_floor(p), 
                         op_displace(p, op_intersect(obj_grid(p),
@@ -637,47 +692,15 @@ vec2 distance_to_obj(in vec3 p) {
     
     //return vec2(sd_mandelbox(p), 8.0);
 # elif FRACTALTYPE < 0
-/*    
-    float dr = 1.0;
-    for (int i=0; i < 6; i++) {
-        boxFold(p,dr);
-        //sphereFold(p, dr);
-        rY(p, 2.0*PI/6.0);
-        //p.xz *= 1.1;
-        p = scale * p + offset;
-        dr = dr * abs(scale) + 1.0;
 
-    }
-*/
-    float yoff = 32.0;
-    return  op_union(    
-                op_union(
-                    obj_floor(p),
-                    //vec2(sd_plane(p, vec3(0.0,1.0,0.0), 0.0), 4.0),
-                    op_union(
-                        op_union(
-                            op_sub(
-                                 obj_round_box(p-vec3(0.0, yoff, 0.0)),
-                                 obj_sphere(p-vec3(0.0, yoff, 0.0), 32.0)
-                            ),
-                            op_sub(
-                                 obj_sphere(p-vec3(100.0, yoff, 0.0), 32.0),
-                                 obj_round_box(p-vec3(100.0, yoff, 0.0))
-                            )
-                            //obj_sphere(p-vec3(75.0, 25.0, 0.0), 24.0)
-                        ),
-                        op_union(
-                            obj_sphere(p-vec3(-100.0, yoff, 0.0), 32.0),
-                            obj_round_box(p-vec3(-100.0, yoff, 0.0))
-                        )
-                    )
-                ),
-                op_intersect(
-                            obj_sphere(p-vec3(-200.0, yoff, 0.0), 32.0),
-                            obj_round_box(p-vec3(-200.0, yoff, 0.0))
-                )
-            )
-;
+    p = op_rep(p, SPREAD);
+    return
+        op_union(
+            obj_boxsphere_perms(p+vec3(0.0, 0.0, 0.0)),
+            obj_tetra_caps(p+vec3(0.0,0.0,50.0))
+        )
+    ;
+
 
 #endif
 
@@ -688,14 +711,6 @@ vec2 distance_to_obj(in vec3 p) {
 //    return op_intersect(vec2(sd_mandelbulb(p/s)*s, 8.0),
 //                        vec2(sd_plane(p, vec3(1.0,0.0,0.0), 0.0), 4.0) );
     //return obj_plane(p, vec3(0.0,1.0,0.0));
-/*    
-    return
-        op_union(
-          obj_floor(p),
-          op_sblend(p,
-            obj_tetrahedron(p, 3.0),
-            obj_capsule(p, vec3(10.5, 0.0, 0.0), vec3(-10.5, 0.0, 0.0), 5.0 )))  ;
-*/
 }
 
 
@@ -912,7 +927,7 @@ vec3 iqfog( in vec3  rgb,      // original color of the pixel
             in float camdist, // camera to point distance
             in vec3  rayDir,   // camera to point vector
             in vec3  sunDir ) {// sun light direction
-    float fogAmount = 1.0 - exp( -camdist*0.0012565125 );
+    float fogAmount = 1.0 - exp( -camdist*0.000512565125 );
     float sunAmount = max( dot( rayDir, sunDir ), 0.0 );
     vec3  fogColor  = mix( vec3(0.5,0.6,0.7), // bluish
                            vec3(1.0,0.9,0.7), // yellowish
@@ -950,13 +965,13 @@ float getao(vec3 p, vec3 n) {
 float calcAO( in vec3 pos, in vec3 nor ) {
 	float occ = 0.0;
     float sca = 1.0;
-    for( int i=0; i<5; i++ ) {
-        float hr = 0.01 + 0.12*float(i)/4.0;
+    for( int i=0; i<10; i++ ) {
+        float hr = 0.01 + 1.2*float(i)/0.5;
         //float hr = 0.01 + 0.12*float(i)/4.0;
         vec3 aopos =  nor * hr + pos;
         float dd = distance_to_obj( aopos ).x;
         occ += -(dd-hr)*sca;
-        sca *= 0.95;
+        sca *= 0.075;
     }
     return clamp( 1.0 - 3.0*occ, 0.0, 1.0 );
 }
@@ -975,6 +990,10 @@ vec3 getNormal( in vec3 p ) {
     return normalize(cross( dFdy(p), dFdx(p) ));
 }
 
+vec3 get_rep_id(vec3 p, vec3 spread) {
+    return floor((p+spread*0.5) / spread);
+}
+
 void main(void) {
     vec2 q = vertTexCoord.st;
     vec2 vPos = -vec2(aspect_ratio, 1.0) + 2.0 * q;
@@ -988,7 +1007,6 @@ void main(void) {
 
     // Camera pos
     vec3 prp = cam_pos;
-
     // Camera setup.
     vec3 vpn=normalize(vrp-prp);
     //vec3 u = normalize(cam_pos);
@@ -1003,9 +1021,9 @@ void main(void) {
     vec3 scp=normalize(scrCoord-prp);
 
     float lightspeed = 0.0125;
-    float lightrad = 5000000.0;
+    float lightrad = 500.0;
     vec3 lightpos = vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
-                         3000000.0,
+                         3000.0,
                          sin(PI/4.0 + framecount*lightspeed)*lightrad);
     //vec3 lightpos = normalize(cam_pos*vec3(-1.0, 1.0, 1.0)) * 500.0;
     //vec3 lightpos =  vec3(400.0,400.0,400.0);
@@ -1014,7 +1032,7 @@ void main(void) {
 
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=1000.0; //Max depth
+    const float maxd=5000.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 
@@ -1027,7 +1045,7 @@ void main(void) {
 //        gl_FragColor=vec4(0.25*prim_color(cam_pos, int(cam_dist.y)),1.0);
 //    }
 //    else {
-    for(int i=0;i<256;i++) {
+    for(int i=0;i<MAX_RAY_STEPS;i++) {
         if ((d.x < ray_hit_epsilon) || (f > maxd)) {
             //p += (vec3(hash(p.x), hash(p.y), hash(p.z)) -= 0.5) * 0.001;
             //d = distance_to_obj(p);
@@ -1057,7 +1075,7 @@ void main(void) {
     
     //AO = getao(p, N) * 0.5;
     AO = calcAO(p, N);
-    AO = AO*AO*AO;
+    //AO = AO*AO*AO;
 #if FRACTALTYPE < 0
     //AO = 1.0;
     //AO = getao(p, N) * 1.0;
@@ -1071,10 +1089,9 @@ void main(void) {
     c =  rainbow2_gradient(AO*1.0);
 #endif
 
-    
-    //AO = AO*AO*AO*AO; 
-    //AO = (AO+getao(p, N)) * 0.25;
-    //AO=1.0;
+    vec3 id = get_rep_id(p, SPREAD);
+    float id_param_c = noise2d(vec2(id.xz));
+    vec3 repidcol = rainbow2_gradient(id_param_c);
 
     float cam_dist = length(cam_pos - p);
     vec3 spher = to_spherical(reflect(normalize(p-cam_pos), N ));
@@ -1085,10 +1102,10 @@ void main(void) {
     //texcol += circ; 
     //texcol = sun(texcol, normalize(cam_pos-p), normalize(p-lightpos));
     //texcol = iqfog(texcol, cam_dist, normalize(p-cam_pos), normalize(p-lightpos));
-    vec3 stepbri = vec3(nsteps/256.0);
-    vec3 glow = vec3(nsteps/256.0) * c * glow_intensity;
+    vec3 stepbri = vec3(nsteps/float(MAX_RAY_STEPS));
+    vec3 glow = stepbri * c * glow_intensity;
     //vec3 glow_miss = vec3(nsteps/256.0) * glowcol_miss * glow_intensity;
-    vec3 glow_miss = vec3(nsteps/256.0) * c * glow_intensity;
+    vec3 glow_miss = stepbri * c * glow_intensity;
 
     
     if (f < maxd) {
@@ -1124,13 +1141,15 @@ void main(void) {
         //vec3 fc = (lamb*1.0 + phong + glow) * AO * c * shad;
         //**
 
-        vec3 fc = (
-                mix(texcol, c, 0.75)
+        vec3 fc = 
+                (
+                mix(texcol, c, 0.0)*repidcol
+
                 + lamb * 0.15
                 + phong * 0.15
                 )
                 * shad
-                //* AO
+                * AO
                 ;
 
         //vec3 fc = (1.0 - stepbri)*c  * shad;
@@ -1140,7 +1159,7 @@ void main(void) {
         //vec3 fc = (lamb*AO + phong*shad ) * c + glow;
         //vec3 fc = shad * (lamb) * AO * c + glow*shad + phong*shad;
         //vec3 fc =  vec3(AO*AO*AO*AO) * c ; // * c + glow*shad;
-        
+        //vec3 fc =  vec3(AO)*stepbri*shad*c; 
         fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         fc += glow;
         fc = pow(fc, vec3(gamma));
