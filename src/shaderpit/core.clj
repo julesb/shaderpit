@@ -102,6 +102,8 @@
       (.set shader "palette_offset" (float (get-in state [:params :palette_offset] 0.0)))
       (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
       (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
+      (.set shader "time" (float (q/millis)))
+
       )
     state))
 
