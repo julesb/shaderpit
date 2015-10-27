@@ -7,10 +7,10 @@ precision mediump int;
 
 #define MANDELBULB 0
 #define MANDELBOX 1
-#define FRACTALTYPE MANDELBULB
-//#define FRACTALTYPE -1
+//#define FRACTALTYPE MANDELBULB
+#define FRACTALTYPE -1
 #define MAX_RAY_STEPS 256
-#define SPREAD vec3(512.0, 0.0, 512.0)
+#define SPREAD vec3(128.0, 0.0, 128.0)
 /*
    Based on tutorial at:
    http://www.geeks3d.com/20130524/building-worlds-with-distance-functions-in-glsl-raymarching-glslhacker-tutorial-opengl/
@@ -38,7 +38,8 @@ uniform float glow_intensity;
 
 float PI=3.14159265;
 
-const float NOISE_DETAIL =0.5;
+const float NOISE_DETAIL =0.01;
+const float NOISE_DETAIL2 =0.2;
 
 const float MB_INNER_SPHERE = 0.72;
 const float MBOX_SCALE = 8.0;
@@ -155,14 +156,14 @@ vec2 obj_sphere(in vec3 p, float r) {
 }
 
 vec2 obj_torus(in vec3 p) {
-    vec2 r = vec2(5.0,1.0);
+    vec2 r = vec2(32.0,8.0);
     vec2 q = vec2(length(p.xz)-r.x,p.y);
     float d = length(q)-r.y;
     return vec2(d,2.0);
 }
 
 vec2 obj_round_box(in vec3 p) {
-    float d = length(max(abs(p)-vec3(22.0,22.0,22.0),0.0))-4.0;
+    float d = length(max(abs(p)-vec3(16.0,16.0,16.0),0.0))-4.0;
     return vec2(d,5.0);
 }
 
@@ -228,6 +229,16 @@ vec2 op_sblend(vec3 p, vec2 a, vec2 b) {
     return vec2(sm, c);
 }
 
+float smoothmax( float a, float b, float k )
+{
+    return -log(exp(k*a) + exp(k*b))/-k;
+}
+
+float smoothmin( float a, float b, float k )
+{
+    return -log(exp(-k*a) + exp(-k*b))/k;
+}
+
 vec3 op_rep(vec3 p, vec3 spread) {
     return mod(p+spread*0.5, spread) - spread*0.5;
 }
@@ -260,12 +271,34 @@ vec3 deform( in vec3 p, in float time, out float sca )
 	return p;
 }
 
+vec3 rotate_x(in vec3 p, float an) {
+    float c = cos(an);
+    float s = sin(an);
+    return vec3(p.x, c * p.y - s * p.z, s * p.y + c * p.z);
+}
+vec3 rotate_y(in vec3 p, float an) {
+    float c = cos(an);
+    float s = sin(an);
+    return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
+}
+/*
 vec3 rotate_y(vec3 p, float a) {
 	float c,s;vec3 q=p;
 	c = cos(a); s = sin(a);
 	p.x = c * q.x + s * q.z;
 	p.z = -s * q.x + c * q.z;
     return p;
+}
+*/
+
+vec3 rotate_z(in vec3 p, float an) {
+    float c = cos(an);
+    float s = sin(an);
+    return vec3(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
+}
+
+vec3 get_rep_id(vec3 p, vec3 spread) {
+    return floor((p+spread*0.5) / spread);
 }
 
 vec2 obj_ufo(vec3 p) {
@@ -316,11 +349,12 @@ vec2 op_noise(vec3 p, vec2 obj) {
 vec2 obj_noise(vec3 p) {
     return vec2(length(p), 5.1);
 }
-
+/*
 vec2 op_rep(vec3 p, vec3 c) {
     vec3 q = mod(p,c)-0.5*c;
     return obj_ufo(q);
 }
+*/
 
 vec2 obj_cross(vec3 p, float r) {
     float inf = 1.0 / 0.0;
@@ -330,8 +364,8 @@ vec2 obj_cross(vec3 p, float r) {
     vec2 b1 = obj_cylinder(p.xyz, vec3(0.0,0.0,r));
     vec2 b2 = obj_cylinder(p.yzx, vec3(0.0,0.0,r));
     vec2 b3 = obj_cylinder(p.zxy, vec3(0.0,0.0,r));
-    //return min(b1,min(b2,b3));
-    return op_sblend(p, b1, op_sblend(p, b2, b3));
+    return min(b1,min(b2,b3));
+    //return op_sblend(p, b1, op_sblend(p, b2, b3));
 }
 
 vec2 obj_repcross(vec3 p, vec3 c) {
@@ -555,23 +589,23 @@ vec2 obj_boxsphere_perms(in vec3 p) {
                 op_union(
                     op_union(
                         op_sub(
-                             obj_round_box(p-vec3(0.0, yoff, 0.0)),
-                             obj_sphere(p-vec3(0.0, yoff, 0.0), 32.0)
+                             obj_round_box(p-vec3(150.0, yoff, 0.0)),
+                             obj_sphere(p-vec3(150.0, yoff, 0.0), 32.0)
                         ),
                         op_sub(
-                             obj_sphere(p-vec3(100.0, yoff, 0.0), 32.0),
-                             obj_round_box(p-vec3(100.0, yoff, 0.0))
+                             obj_sphere(p-vec3(50.0, yoff, 0.0), 32.0),
+                             obj_round_box(p-vec3(50.0, yoff, 0.0))
                         )
                     ),
                     op_union(
-                        obj_sphere(p-vec3(-100.0, yoff, 0.0), 32.0),
-                        obj_round_box(p-vec3(-100.0, yoff, 0.0))
+                        obj_sphere(p-vec3(-50.0, yoff, 0.0), 32.0),
+                        obj_round_box(p-vec3(-50.0, yoff, 0.0))
                     )
                 )
             ),
             op_intersect(
-                obj_sphere(p-vec3(-200.0, yoff, 0.0), 32.0),
-                obj_round_box(p-vec3(-200.0, yoff, 0.0))
+                obj_sphere(p-vec3(-150.0, yoff, 0.0), 32.0),
+                obj_round_box(p-vec3(-150.0, yoff, 0.0))
             )
         )
     ;
@@ -579,14 +613,56 @@ vec2 obj_boxsphere_perms(in vec3 p) {
 
 vec2 obj_tetra_caps(in vec3 p) {
     return
-        op_union(
-          obj_floor(p),
           //op_sblend(p,
           op_union(
             obj_tetrahedron(p-vec3(0.0,20.0,0.0), 4.0),
-            obj_capsule(p, vec3(20.5, 20.0, 0.0), vec3(-20.5, 20.0, 0.0), 10.0 )))  ;
+            obj_capsule(p, vec3(20.5, 20.0, 0.0), vec3(-20.5, 20.0, 0.0), 10.0 ));
+}
+vec2 obj_boxsubsphere(in vec3 p) {
+    return op_sub(
+         obj_round_box(p),
+         obj_sphere(p, 24.0)
+         );
 }
 
+vec2 random_prim(vec3 p, float h, vec3 id) {
+    //float phase = noise2d(id.xz) * 2.0 * PI; 
+    //float dir = (hash(id.x*id.z) < 0.0)? -1.0: 1.0;
+    //float dir = (noise(id) < 0.5)? -1.0:1.0;
+    float speed = (noise2d(id.xz*NOISE_DETAIL2) - 0.0) * 1.0;
+    if (h < 0.1) {
+        return obj_boxsubsphere(p);
+    }
+
+    if (h < 0.2) {
+        return obj_sphere(p, 40.0);
+    }
+    else if (h < 0.4) {
+        return obj_torus(p-vec3(0.0,8.0,0.0));
+    }
+    else if (h < 0.5) {
+        return obj_round_box(p);
+    }
+    else if (h < 0.6) {
+        return obj_tetrahedron(p, 8.0);
+    }
+    else if (h < 0.7) {
+        p = rotate_y(p, time*0.001*speed);
+        //p = rotate_x(p, time*speed);
+        return obj_tetra_caps(p);
+    }
+    else if (h < 0.8) {
+        p = rotate_x(p, time*0.001*speed);
+        return obj_capsule(p, vec3(0.0, -40.0, 0.0), vec3(0.0, 40.0, 0.0), 8.0);
+    }
+    else if (h < 0.9) {
+        p = rotate_y(p, time*0.001*speed);
+        return obj_capsule(p, vec3(32.0, 16.0, 0.0), vec3(-32.0, 16.0, 0.0), 8.0);
+    }
+    else {
+        return vec2(99999.0, 5.0);
+    }
+}
 
 vec2 distance_to_obj(in vec3 p) {
 //    return op_union(obj_floor(p) + vec2(sin(p.x) + sin(p.y) + sin(p.z), 0.0),
@@ -662,7 +738,7 @@ vec2 distance_to_obj(in vec3 p) {
     //p = rotate_y(p, framecount * 0.01);
 #if FRACTALTYPE == MANDELBULB
 //    return obj_invertedgrid(p);
-    p = op_rep(p, SPREAD);
+    //p = op_rep(p, SPREAD);
     return op_sblend(p,
             op_sblend(p, obj_floor(p), 
                         op_displace(p, op_intersect(obj_grid(p),
@@ -693,14 +769,28 @@ vec2 distance_to_obj(in vec3 p) {
     //return vec2(sd_mandelbox(p), 8.0);
 # elif FRACTALTYPE < 0
 
+    vec3 id = get_rep_id(p, SPREAD);
     p = op_rep(p, SPREAD);
+    float t = framecount / 10.0;// * 2.0 * PI;
+    float phase = hash(id.x*id.z) * 2.0 * PI;
+    float soff = (sin(t+phase)* 0.5 + 0.5) * 32.0;
+    //float obidx =  hash(id.x*id.z); // * 0.5 + 0.5;
+    float obidx =  noise2d(id.xz * NOISE_DETAIL2); // * 0.5 + 0.5;
+    return 
+        //op_sblend(p, 
+        op_union( 
+            obj_floor(p),
+            random_prim(p-vec3(0.0,soff,0.0), obidx, id))
+            //obj_round_box(p-vec3(0.0,40.0 + mod(id.x*id.z, 4.0)+ soff ,0.0)))
+        * vec2(0.5, 1.0);
+/*          
     return
         op_union(
             obj_boxsphere_perms(p+vec3(0.0, 0.0, 0.0)),
-            obj_tetra_caps(p+vec3(0.0,0.0,50.0))
+            obj_tetra_caps(p+vec3(0.0,0.0,150.0))
         )
     ;
-
+*/
 
 #endif
 
@@ -830,6 +920,7 @@ vec3 prim_color(in vec3 p, float i) {
     prim_cols[6] = vec3(1.0,0.0,1.0);
     prim_cols[7] = vec3(0.5,0.0,1.0);
     prim_cols[8] = vec3(1.0,1.0,1.0);
+    i = floor(i);
 
     if (i == 0.0)
         return floor_color(p);
@@ -837,11 +928,14 @@ vec3 prim_color(in vec3 p, float i) {
         return prim_cols[int(i)];
     }
     else {
-         return pal((0.5*snoise(p*NOISE_DETAIL)+framecount*0.01)*2.0*PI, vec3(0.5),
+        return vec3(0.1,0.1,0.1);
+        /*
+         return pal((0.5*snoise(p*NOISE_DETAIL)+framecount*0.005)*2.0*PI, vec3(0.5),
                                                            vec3(0.5),
                                                            vec3(0.5),
                                                            //p);
                                                            vec3(0.,1.0,0.0) + 1.0 );
+       */                                                    
 /*
         int i1 = int(i);
         int i2 = int(mod(floor(i)+1.0, 8.0));
@@ -915,7 +1009,7 @@ float iqsoftshadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k ) {
     float res = 1.0;
     for( float t=mint; t < maxt; ) {
         float h = distance_to_obj(ro + rd*t).x;
-        if( h < 0.0005)
+        if( h < 0.001)
             return 0.0;
         res = min( res, k*h/t );
         t += h;
@@ -990,9 +1084,6 @@ vec3 getNormal( in vec3 p ) {
     return normalize(cross( dFdy(p), dFdx(p) ));
 }
 
-vec3 get_rep_id(vec3 p, vec3 spread) {
-    return floor((p+spread*0.5) / spread);
-}
 
 void main(void) {
     vec2 q = vertTexCoord.st;
@@ -1021,8 +1112,8 @@ void main(void) {
     vec3 scp=normalize(scrCoord-prp);
 
     float lightspeed = 0.0125;
-    float lightrad = 500.0;
-    vec3 lightpos = vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
+    float lightrad = 1500.0;
+    vec3 lightpos = cam_pos+vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
                          3000.0,
                          sin(PI/4.0 + framecount*lightspeed)*lightrad);
     //vec3 lightpos = normalize(cam_pos*vec3(-1.0, 1.0, 1.0)) * 500.0;
@@ -1076,12 +1167,23 @@ void main(void) {
     //AO = getao(p, N) * 0.5;
     AO = calcAO(p, N);
     //AO = AO*AO*AO;
+
+
+    vec3 id = get_rep_id(p, SPREAD);
+    float id_param_c = noise2d(id.xz * NOISE_DETAIL2);
+    vec3 repidcol = rainbow2_gradient(id_param_c);
+    vec3 repidcol2 = rainbow2_gradient(1.0 - id_param_c);
+
 #if FRACTALTYPE < 0
     //AO = 1.0;
     //AO = getao(p, N) * 1.0;
     vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
     vec3 glowcol = (rainbow2_gradient(AO*1.0));// + vec3(1.0, 1.0, 1.0)) * 0.5 ;
-    c = prim_color(p, d.y);
+    //c = prim_color(p, d.y);
+    //c = prim_color(p, mod(id.x*id.z, 12.0));
+    
+    //c = prim_color(p, noise2d(id.xz*NOISE_DETAIL2) * 12.0);
+    c = 1.0 - rainbow2_gradient( noise2d(id.xz*NOISE_DETAIL2));
     //c = rainbow2_gradient(AO*1.0);
 #else
     vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
@@ -1089,9 +1191,6 @@ void main(void) {
     c =  rainbow2_gradient(AO*1.0);
 #endif
 
-    vec3 id = get_rep_id(p, SPREAD);
-    float id_param_c = noise2d(vec2(id.xz));
-    vec3 repidcol = rainbow2_gradient(id_param_c);
 
     float cam_dist = length(cam_pos - p);
     vec3 spher = to_spherical(reflect(normalize(p-cam_pos), N ));
@@ -1143,10 +1242,10 @@ void main(void) {
 
         vec3 fc = 
                 (
-                mix(texcol, c, 0.0)*repidcol
+                mix(mix(texcol, c, 0.75), repidcol, 0.0)
 
-                + lamb * 0.15
-                + phong * 0.15
+                + lamb * 0.5
+                + phong * 0.5
                 )
                 * shad
                 * AO
@@ -1160,8 +1259,8 @@ void main(void) {
         //vec3 fc = shad * (lamb) * AO * c + glow*shad + phong*shad;
         //vec3 fc =  vec3(AO*AO*AO*AO) * c ; // * c + glow*shad;
         //vec3 fc =  vec3(AO)*stepbri*shad*c; 
-        fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         fc += glow;
+        fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         fc = pow(fc, vec3(gamma));
         gl_FragColor = vec4(fc, 1.0);
         // *
@@ -1182,9 +1281,11 @@ void main(void) {
         //vec3 circ = get_grid_pixel_color((-0.5+fract(uv2.xy))*4.0);
         //bgcol += circ;
         //bgcol = sun(bgcol, normalize(p-cam_pos), normalize(p-lightpos));
-        bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         bgcol += glow_miss;
+        bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         bgcol = pow(bgcol, vec3(gamma));
+        
+        //bgcol = vec3(noise2d(scp.xy*100.0));
         // vec3 glow = vec3(nsteps/256.0) *  vec3(0.8,0.8,1.0) * 1.0;
         gl_FragColor=vec4(bgcol.rgb,1.0); //background color
     }
