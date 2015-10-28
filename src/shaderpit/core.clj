@@ -6,12 +6,57 @@
   )
 
 (def ^:dynamic console-font)
-(def ray-shader (atom nil))
 (def tex1 (atom nil))
 (def tex2 (atom nil))
 (def ^:const PI Math/PI)
 
 ; =========================================================================
+
+(def default-shader {
+  :id 0
+  :name "Unnamed"
+  :path ""
+  :type :fragment
+  :shaderobj nil
+  })
+
+
+(defn define-shader
+  [& {:keys [id name path type]
+      :or {id (default-shader :id)
+           name (default-shader :path) ; name=path
+           path (default-shader :path)
+           type (default-shader :type) } }]
+  (-> default-shader
+      (assoc :id id)
+      (assoc :name path)
+      (assoc :path path)
+      (assoc :type type) ))
+
+
+(defn glsl-file-list []
+  (->> (seq (.list (clojure.java.io/file "./glsl")))
+       (filter #(re-matches #".+\.glsl$" %))))
+
+
+(defn load-shader-dir []
+  (into []
+  (map-indexed #(define-shader :id %1
+                               :path (str "./glsl/" %2)
+                               :name %2)
+               (glsl-file-list)))
+)
+
+(defn next-shader [state]
+  (let [id (get-in state [:current-shader :id])
+        newid  (mod (inc id) (count (state :shaders)))
+        newshader ((get state :shaders) newid)
+        newshader-obj (q/load-shader (get newshader :path)) ]
+    (-> state
+        (assoc :current-shader newshader)
+        (assoc-in [:current-shader :shaderobj] newshader-obj)
+      )
+  ))
 
 (def initial-camera {
   :pos [128.0 50.0 0.0]
@@ -22,7 +67,7 @@
 })
 
 (def initial-params {
-  :blend_coef 30.0
+  :blend_coef 20.0
   :ray_hit_epsilon 0.01
   :palette_offset 0.0
   :gamma 0.55
@@ -37,24 +82,29 @@
   :render-paused? false
   :camera initial-camera
   :params initial-params
+  :shaders {}
+  :current-shader nil
 })
 
 
 
 
 (defn setup []
-    (q/smooth)
+  (let [shaderlist (load-shader-dir)
+        current-shader (first shaderlist)
+        shaderobj (q/load-shader (current-shader :path))  ]
+    ;(q/smooth)
     (q/texture-mode :normal)
     (q/texture-wrap :repeat)
     (q/noise-detail 2)
     (q/hint :disable-depth-test)
     ;(frame-rate 120)
     (def console-font (q/load-font "data/FreeMono-16.vlw"))
-    ;(reset! tex1 (q/load-image "testpattern4po6.png"))
+    (reset! tex1 (q/load-image "testpattern4po6.png"))
     ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
     ;(reset! tex1 (q/load-image "uv_checker_large.png"))
     ;(reset! tex1 (q/load-image "Sky02.jpg"))
-    (reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
+    ;(reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
     ;(reset! tex1 (q/load-image "North_South_Panorama_Equirect_360x180.jpg"))
     ;(reset! tex1 (q/load-image "QueensPark.m.jpg"))
     ;(reset! tex1 (q/load-image "beach-hdr-blur128.jpg"))
@@ -65,13 +115,15 @@
     ;(reset! tex1 (q/load-image "beach-hdr.jpg"))
     ;(reset! tex1 (q/load-image "studio010.jpg"))
     
-    (reset! ray-shader (q/load-shader "glsl/raymarch.glsl"))
-    ;(reset! ray-shader (q/load-shader "data/raymarch.glsl" "raymarch-vert.glsl"))
     ;(reset! texture-shader (load-shader "data/texfrag.glsl" "data/texvert.glsl"))
 
     (-> initial-state
-         (assoc :aspect-ratio (/ (float (q/width)) (q/height))))
-  )
+         (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
+         (assoc :shaders shaderlist)
+         (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
+
+         )
+  ))
 
 
 (defn update-uniforms! [state shader] 
@@ -204,8 +256,9 @@
     \m (do (-> initial-state
                (update-in [:mousewarp] not)))
     \` (do
-         (reset! ray-shader (q/load-shader "glsl/raymarch.glsl" ))
          state)
+    \/ (do (-> state
+               (next-shader)))
     state))
 
 
@@ -227,7 +280,7 @@
 (defn update [state]
   (-> state
       (do-movement-keys)
-      (update-uniforms! @ray-shader)
+      (update-uniforms! (get-in state [:current-shader :shaderobj]))
   ))
 
 
@@ -245,9 +298,10 @@
         eps (get-in state [:params :ray_hit_epsilon] 0.0)
         gamma (get-in state [:params :gamma] 0.0)
         glow (get-in state [:params :glow-intensity] 0.0)
-
+        shadername (get-in state [:current-shader :name] "-")
         lines [
                ;(str "state: " state)
+               (str "shader: " shadername)
                (str "pos: " (vec3-format pos))
                (str (format "mouse: [%.2f %.2f]" (float mx) (float my)))
                (str (format "speed: %.6f" speed))
@@ -265,10 +319,10 @@
       (q/text (lines i) x (+ y (* i line-space))))))
 
 
-(defn draw-quad [ar]
+(defn draw-quad [state ar]
   (q/begin-shape :quads)
     (q/texture @tex1)
-    (q/shader @ray-shader)
+    (q/shader (get-in state [:current-shader :shaderobj]))
     (q/vertex -1 -1 0 0)
     (q/vertex  1 -1 ar 0)
     (q/vertex  1  1 ar 1)
@@ -286,12 +340,12 @@
       (q/scale (c 0) (c 1))
       ;(q/fill 0 0 0)
       (q/no-stroke)
-      (draw-quad (get state :aspect-ratio 1.0))
+      (draw-quad state (get state :aspect-ratio 1.0))
 
       )
     )
   (q/reset-shader) 
-  (draw-info state 32 (- (q/height) 225))
+  (draw-info state 32 (- (q/height) 250))
   )
 
 
