@@ -5,10 +5,6 @@ precision mediump float;
 precision mediump int;
 #endif
 
-#define MANDELBULB 0
-#define MANDELBOX 1
-//#define FRACTALTYPE MANDELBULB
-#define FRACTALTYPE -1
 #define MAX_RAY_STEPS 256
 #define SPREAD vec3(128.0, 0.0, 128.0)
 /*
@@ -19,11 +15,11 @@ vec3 prim_cols[9];
 
 uniform sampler2D texture;
 uniform float aspect_ratio;
-uniform float mousex;
-uniform float mousey;
+//uniform float mousex;
+//uniform float mousey;
 uniform float framecount;
-uniform float swidth;
-uniform float sheight;
+//uniform float swidth;
+//uniform float sheight;
 uniform vec3 cam_pos;
 uniform vec3 cam_lookat;
 uniform float cam_fov;
@@ -41,9 +37,9 @@ float PI=3.14159265;
 const float NOISE_DETAIL =0.01;
 const float NOISE_DETAIL2 =0.2;
 
-const float MB_INNER_SPHERE = 0.72;
-const float MBOX_SCALE = 8.0;
-const float MBULB_SCALE = 128.0;
+//const float MB_INNER_SPHERE = 0.72;
+//const float MBOX_SCALE = 8.0;
+//const float MBULB_SCALE = 128.0;
 
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -303,13 +299,13 @@ vec3 get_rep_id(vec3 p, vec3 spread) {
 
 vec2 obj_ufo(vec3 p) {
     return op_sblend(p,
-        op_sub(
+        op_union(
             op_displace(p, obj_sphere(p, 1.25)),
-            op_union(op_displace(p, obj_round_box(p)),
+            op_sub(op_displace(p, obj_round_box(p)),
                      op_displace(p, obj_torus(p)))),
         op_sblend(p,
-            op_displace(p, obj_capsule(p, vec3(3.5, 0.0, 0.0), vec3(-3.5, 0.0, 0.0), 0.95 )),
-            op_displace(p, obj_capsule(p, vec3(0.0, 0.0, -3.5), vec3(0.0, 0.0, 3.5), 0.95 )) )
+            op_displace(p, obj_capsule(p, vec3(30.5, 0.0, 0.0), vec3(-30.5, 0.0, 0.0), 5.95 )),
+            op_displace(p, obj_capsule(p, vec3(0.0, 0.0, -30.5), vec3(0.0, 0.0, 30.5), 5.95 )) )
         //obj_capsule(p, vec3(0.0, 1.5, 0.0), vec3(0.0, -1.5, 0.0), 0.5 )
         //op_displace(p, obj_capsule(p, vec3(0.0, 1.5, 0.0), vec3(0.0, -1.5, 0.0), 0.5 ))
         
@@ -349,12 +345,6 @@ vec2 op_noise(vec3 p, vec2 obj) {
 vec2 obj_noise(vec3 p) {
     return vec2(length(p), 5.1);
 }
-/*
-vec2 op_rep(vec3 p, vec3 c) {
-    vec3 q = mod(p,c)-0.5*c;
-    return obj_ufo(q);
-}
-*/
 
 vec2 obj_cross(vec3 p, float r) {
     float inf = 1.0 / 0.0;
@@ -403,175 +393,9 @@ float sd_tetra(in vec3 p) {
 }
 
 vec2 obj_tetrahedron(in vec3 p, in float s) {
-/*
-    vec3 a1 = normalize(vec3(1,1,1));
-	vec3 a2 = normalize(vec3(-1,-1,1));
-	vec3 a3 = normalize(vec3(1,-1,-1));
-	vec3 a4 = normalize(vec3(-1,1,-1));
-    float p1 = sd_plane(p, a1, s);
-    float p2 = sd_plane(p, a2, s);
-    float p3 = sd_plane(p, a3, s);
-    float p4 = sd_plane(p, a4, s);
-    float d = min(min(min(p1, p2), p3), p4);
-    return vec2(-d, 1.0);
-*/
     return vec2(sd_tetra(p/s) * s, 7.0);
 }
 
-float sd_mandelbulb(in vec3 pos, out float AO) {
-	vec3 z = pos;
-	float dr = 1.0;
-	float r = 0.0;
-    int iters = 10;
-    float power = 8.0;
-    float bailout = 2.0;
-    AO = 1.0;
-	for (int i = 0; i < iters ; i++) {
-        AO *= 0.725;
-		r = length(z);
-		if (r>bailout) {
-            AO = min((AO + 0.075) * 4.1, 1.0);
-            //return min(length(pos) - MB_INNER_SPHERE, 0.5 * log(r) * r / dr);
-            break;
-        }
-		
-		// convert to polar coordinates
-		float theta = acos(z.z/r);
-		float phi = atan(z.y,z.x);
-		dr =  pow( r, power-1.0)*power*dr + 1.0;
-		
-		// scale and rotate the point
-		float zr = pow( r,power);
-		theta = theta*power;
-		phi = phi*power;
-		
-		// convert back to cartesian coordinates
-		z = zr*vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
-		z+=pos;
-	}
-	return 0.5*log(r)*r/dr;
-}
-
-float sd_mandelbulb(vec3 p) {
-    float ignore;
-    return sd_mandelbulb(p, ignore);
-}
-
-
-
-void sphereFold(inout vec3 z, inout float dz)
-{
-	float r2 = dot(z,z);
-	if (r2 < 0.5)
-    { 
-		float temp = 2.0;
-		z *= temp;
-		dz*= temp;
-	}
-    else if (r2 < 1.0)
-    { 
-		float temp = 1.0 / r2;
-		z *= temp;
-		dz*= temp;
-	}
-}
-
-void boxFold(inout vec3 z, inout float dz)
-{
-	z = clamp(z, -1.0, 1.0) * 2.0 - z;
-}
-
-float sd_mandelbox(vec3 z, out float AO) {
-    //AO = 1.0;
-    int iters = 20;
-    float scale = 2.0;
-	vec3 offset = z;
-	float dr = 1.0;
-    //float aostep = 1.0 / 
-	for (int n = 0; n < iters; n++) {
-        //AO *= 0.725;
-		boxFold(z,dr);
-		sphereFold(z,dr);
-        z = scale * z + offset;
-        dr = dr * abs(scale) + 1.0;
-	}
-	float r = length(z);
-    AO = log(r)/32.0;
-    //AO = 1.0 - (r / abs(dr))/ float(iters);
-
-    //AO = min((AO + 0.075) * 4.1, 1.0);
-	return  r / abs(dr);
-}
-
-float sd_mandelhack(vec3 z, out float AO) {
-    //AO = 1.0;
-    int iters = 16;
-    float scale = 2.75;
-	vec3 offset = z*z;
-	float dr = 1.0;
-    //float aostep = 1.0 / 
-	for (int n = 0; n < iters; n++) {
-        //AO *= 0.725;
-		boxFold(z,dr);
-		//boxFold(z,dr);
-		sphereFold(z,dr);
-        dr = dr * abs(scale) + 1.0;
-        z = scale * z + offset;
-	}
-	float r = length(z);
-    AO = log(r)/32.0;
-    //AO = 1.0 - (r / abs(dr))/ float(iters);
-
-    //AO = min((AO + 0.075) * 4.1, 1.0);
-	return  r / abs(dr);
-}
-
-float sd_mandelhack(vec3 p) {
-    float ignore;
-    return sd_mandelhack(p, ignore);
-}
-
-
-float sd_mandelbox(vec3 p) {
-	float ignore;
-	return sd_mandelbox(p, ignore);
-}
-
-vec2 obj_invertedmandel(vec3 p) {
-    float s = 1.0;
-    vec3 p2 = (deform(p,float(framecount)*0.01333, s));
-    vec2 g = vec2(sd_mandelbox(p2), 8.0) * vec2(s, 1.0);
-    return g;
-}
-
-float sierp(vec3 z) {
-    float scale = 2.0;
-	vec3 a1 = vec3(1,1,1);
-	vec3 a2 = vec3(-1,-1,1);
-	vec3 a3 = vec3(1,-1,-1);
-	vec3 a4 = vec3(-1,1,-1);
-	vec3 c;
-	int n = 0;
-	float dist, d;
-	while (n < 8) {
-		 //c = a1; dist =  sd_tetra(z-a1);
-	     //d = sd_tetra(z-a2); if (d < dist) { c = a2; dist=d; }
-		 //d = sd_tetra(z-a3); if (d < dist) { c = a3; dist=d; }
-		 //d = sd_tetra(z-a4); if (d < dist) { c = a4; dist=d; }
-		 c = a1; dist = length(z-a1);
-	     d = length(z-a2); if (d < dist) { c = a2; dist=d; }
-		 d = length(z-a3); if (d < dist) { c = a3; dist=d; }
-		 d = length(z-a4); if (d < dist) { c = a4; dist=d; }
-		z = scale*z-c*(scale-1.0);
-		n++;
-    }
- 
-	return length(z) * pow(scale, float(-n));
-}
-
-vec2 obj_sierp(vec3 p) {
-    return vec2(sierp(p), 5.0);
-}
 
 void rY(inout vec3 p, float a) {
 	float c,s;vec3 q=p;
@@ -630,6 +454,7 @@ vec2 random_prim(vec3 p, float h, vec3 id) {
     //float dir = (hash(id.x*id.z) < 0.0)? -1.0: 1.0;
     //float dir = (noise(id) < 0.5)? -1.0:1.0;
     float speed = (noise2d(id.xz*NOISE_DETAIL2) - 0.0) * 1.0;
+    h *= 1.1;
     if (h < 0.1) {
         return obj_boxsubsphere(p);
     }
@@ -653,14 +478,20 @@ vec2 random_prim(vec3 p, float h, vec3 id) {
     }
     else if (h < 0.8) {
         p = rotate_x(p, time*0.001*speed);
-        return obj_capsule(p, vec3(0.0, -40.0, 0.0), vec3(0.0, 40.0, 0.0), 8.0);
+        return obj_capsule(p, vec3(0.0, -20.0, 0.0), vec3(0.0, 20.0, 0.0), 16.0);
     }
     else if (h < 0.9) {
         p = rotate_y(p, time*0.001*speed);
         return obj_capsule(p, vec3(32.0, 16.0, 0.0), vec3(-32.0, 16.0, 0.0), 8.0);
     }
+    else if (h < 1.0) {
+        p = rotate_y(p, time*0.001*speed);
+        p = rotate_z(p, time*0.001*speed*1.031);
+        return obj_box(p, vec3(16.0,16.0,16.0));
+    }
     else {
-        return vec2(99999.0, 5.0);
+        return obj_sphere(p, 4.0);
+        //return vec2(99999.0, 5.0);
     }
 }
 
@@ -715,7 +546,7 @@ vec2 distance_to_obj(in vec3 p) {
 
 
 
-    float s = MBOX_SCALE;
+//    float s = MBOX_SCALE;
 ////    vec2 g = op_noise(p, op_sblend(p, op_displace(p, obj_grid(p)),
 ////                                    op_rep(p, vec3(15.0, 15.0, 15.0))));
     //vec2 g =obj_invertedgrid(p/s) * vec2(1.0/s, 1.0);
@@ -736,118 +567,26 @@ vec2 distance_to_obj(in vec3 p) {
  //                   obj_sierp(p/s) * vec2(s, 1.0));
 
     //p = rotate_y(p, framecount * 0.01);
-#if FRACTALTYPE == MANDELBULB
-//    return obj_invertedgrid(p);
-    //p = op_rep(p, SPREAD);
-    return op_sblend(p,
-            op_sblend(p, obj_floor(p), 
-                        op_displace(p, op_intersect(obj_grid(p),
-                                                    obj_box(p, vec3(1000.0)) ))),
-            op_sblend(p, vec2(sd_mandelbulb(p/MBULB_SCALE)*MBULB_SCALE, 1.0),
-                         op_displace(p, obj_sphere(p, MBULB_SCALE * 0.75))));
-/*
-    return op_sblend(p,
-            obj_floor(p), 
-            op_sblend(p, vec2(sd_mandelbulb(p/MBULB_SCALE)*MBULB_SCALE, 1.0),
-                         op_displace(p, obj_sphere(p, MBULB_SCALE * 0.75))));
-*/
-//return op_sblend(p, vec2(sd_mandelbulb(p/MBULB_SCALE)*MBULB_SCALE, 8.0),
-//                        obj_sphere(p, MBULB_SCALE * 0.5));
-//    return vec2(sd_mandelhack(p/MBOX_SCALE)*MBOX_SCALE, 8.0);
-
-    //return op_union(obj_floor(p),
-    //                vec2(sd_mandelbulb(p/s)*s, 9.0));
-//    return op_sub(
-//                  obj_sphere(p, MBULB_SCALE * 1.0),
-//            vec2(sd_mandelbulb(p/MBULB_SCALE)*MBULB_SCALE, 8.0));
-#elif FRACTALTYPE == MANDELBOX
-
-    //return obj_invertedmandel(p);
-
-    return vec2( sd_mandelbox(p/MBOX_SCALE)*MBOX_SCALE, 8.0);
-    
-    //return vec2(sd_mandelbox(p), 8.0);
-# elif FRACTALTYPE < 0
-
     vec3 id = get_rep_id(p, SPREAD);
-    p = op_rep(p, SPREAD);
+    vec3 prep = op_rep(p, SPREAD);
     float t = framecount / 10.0;// * 2.0 * PI;
     float phase = hash(id.x*id.z) * 2.0 * PI;
     float soff = (sin(t+phase)* 0.5 + 0.5) * 32.0;
     //float obidx =  hash(id.x*id.z); // * 0.5 + 0.5;
     float obidx =  noise2d(id.xz * NOISE_DETAIL2); // * 0.5 + 0.5;
-    return 
+    vec2 scene1 = 
         //op_sblend(p, 
-        op_union( 
-            obj_floor(p),
-            random_prim(p-vec3(0.0,soff,0.0), obidx, id))
-            //obj_round_box(p-vec3(0.0,40.0 + mod(id.x*id.z, 4.0)+ soff ,0.0)))
+        //op_union( 
+            //obj_floor(p),
+            random_prim(prep-vec3(0.0,soff,0.0), obidx, id)
+       // )
         * vec2(0.5, 1.0);
-/*          
-    return
-        op_union(
-            obj_boxsphere_perms(p+vec3(0.0, 0.0, 0.0)),
-            obj_tetra_caps(p+vec3(0.0,0.0,150.0))
-        )
-    ;
-*/
 
-#endif
+        return scene1;
 
 
-
-
-
-//    return op_intersect(vec2(sd_mandelbulb(p/s)*s, 8.0),
-//                        vec2(sd_plane(p, vec3(1.0,0.0,0.0), 0.0), 4.0) );
-    //return obj_plane(p, vec3(0.0,1.0,0.0));
 }
 
-
-vec3 get_integer_circles_color(vec2 c, vec3 col) {
-    vec3 pixel;
-    vec3 basecol = col; //vec4(1.0, 1.0, 0.75, 1.0);
-    float line_width = 0.1;
-    float dnorm = length(c);
-    float nearest_int = abs(dnorm-float(round(dnorm)));
-    if (nearest_int < line_width) {
-        float a =  1.0 - nearest_int/line_width;
-        pixel = vec3(a,a,a) * basecol;
-    }
-    else {
-        pixel = vec3(0.0,0.0,0.0);
-    }
-    return pixel;
-}
-
-vec3 get_grid_pixel_color(vec2 c) {
-    int grid_pixel = 0;
-    float bri=0.;
-    int val = 0;
-    float line_width = 0.0125;
-    vec3 linecolor = vec3(1.0, 1.0, 1.0);
-    vec3 bgcolor = vec3(0.0,0.0,0.0);
-    vec2 nearest_int = vec2(abs(c.x - round(c.x)), abs(c.y - round(c.y)));
-
-    if ((nearest_int.x < line_width) && (nearest_int.y < line_width)) { // line intersection
-      bri = 2.0 - (nearest_int.x+nearest_int.y) / line_width; // better
-      return linecolor * bri;
-    }
-    else if ((nearest_int.x < line_width) || (nearest_int.y < line_width)) {
-      if (nearest_int.x < line_width) {
-            bri = ((1.-nearest_int.x/(line_width)));
-            return linecolor * bri;
-      }
-      else if (nearest_int.y < line_width) {
-        bri = ((1.-nearest_int.y/(line_width)));
-        return linecolor * bri;
-      }
-    }
-    else {
-        linecolor = bgcolor;
-    }
-    return linecolor;
-  }
 
 
 
@@ -1021,7 +760,7 @@ vec3 iqfog( in vec3  rgb,      // original color of the pixel
             in float camdist, // camera to point distance
             in vec3  rayDir,   // camera to point vector
             in vec3  sunDir ) {// sun light direction
-    float fogAmount = 1.0 - exp( -camdist*0.000512565125 );
+    float fogAmount = 1.0 - exp( -camdist*0.0002512565125 );
     float sunAmount = max( dot( rayDir, sunDir ), 0.0 );
     vec3  fogColor  = mix( vec3(0.5,0.6,0.7), // bluish
                            vec3(1.0,0.9,0.7), // yellowish
@@ -1060,14 +799,14 @@ float calcAO( in vec3 pos, in vec3 nor ) {
 	float occ = 0.0;
     float sca = 1.0;
     for( int i=0; i<10; i++ ) {
-        float hr = 0.01 + 1.2*float(i)/0.5;
+        float hr = 0.01 + float(i)/0.0525;
         //float hr = 0.01 + 0.12*float(i)/4.0;
         vec3 aopos =  nor * hr + pos;
         float dd = distance_to_obj( aopos ).x;
         occ += -(dd-hr)*sca;
-        sca *= 0.075;
+        sca *= 0.0125;
     }
-    return clamp( 1.0 - 3.0*occ, 0.0, 1.0 );
+    return clamp( 1.1 - occ*4.0, 0.0, 1.0 );
 }
 
 
@@ -1150,12 +889,6 @@ void main(void) {
 
 
     float AO;
-#if FRACTALTYPE == MANDELBULB
-        float m = sd_mandelbulb(p/MBULB_SCALE, AO); //*MBULB_SCALE;
-#elif FRACTALTYPE == MANDELBOX
-        float m = sd_mandelbox(p/MBOX_SCALE, AO); // * MBOX_SCALE;
-#endif
-
     vec3 n = vec3(d.x-distance_to_obj(p-e.xyy).x,
                   d.x-distance_to_obj(p-e.yxy).x,
                   d.x-distance_to_obj(p-e.yyx).x);
@@ -1174,7 +907,6 @@ void main(void) {
     vec3 repidcol = rainbow2_gradient(id_param_c);
     vec3 repidcol2 = rainbow2_gradient(1.0 - id_param_c);
 
-#if FRACTALTYPE < 0
     //AO = 1.0;
     //AO = getao(p, N) * 1.0;
     vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
@@ -1182,15 +914,9 @@ void main(void) {
     //c = prim_color(p, d.y);
     //c = prim_color(p, mod(id.x*id.z, 12.0));
     
-    //c = prim_color(p, noise2d(id.xz*NOISE_DETAIL2) * 12.0);
-    c = 1.0 - rainbow2_gradient( noise2d(id.xz*NOISE_DETAIL2));
+    c = prim_color(p, noise2d(id.xz*NOISE_DETAIL2) * 12.0);
+    c *= 1.0 - rainbow2_gradient( noise2d(id.xz*NOISE_DETAIL2));
     //c = rainbow2_gradient(AO*1.0);
-#else
-    vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
-    vec3 glowcol = rainbow2_gradient(AO*1.0); //vec3(1.0, 1.0, 1.0);
-    c =  rainbow2_gradient(AO*1.0);
-#endif
-
 
     float cam_dist = length(cam_pos - p);
     vec3 spher = to_spherical(reflect(normalize(p-cam_pos), N ));
@@ -1225,32 +951,31 @@ void main(void) {
         //vec3 fc = vec3(AO* (b*c + pow(b,32.0)) * (1.0-f*0.005));
         //vec3 fc = vec3(0.0*glow + AO* c*1.0);
         vec3 ambient = vec3(0.15, 0.09, 0.08);
-        float amb_shad =0.1;
-        float amb_lamb = 0.1;
+        float amb_shad =0.2;
+        float amb_lamb = 0.0;
 
         //vec3 cam_dist_sc = vec3(cam_dist/ 256.0);
         float b=dot(N,normalize(lightpos-p));
-        vec3 phong =  vec3((b + pow(b,8.0))); // * (1.0-f*0.005));
+        vec3 phong =  vec3((b + pow(b,64.0))); // * (1.0-f*0.005));
         vec3 lamb = amb_lamb + (1.0 - amb_lamb) * lambert(p, N, lightpos);
         //vec3 lamb = lambert(p, N, lightpos);
         float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, normalize(lightpos-p), 0.1, 200.0, 16.0);
-        //float shad = iqsoftshadow(p, normalize(lightpos-p), 0.1, 300.0, 32.0);
-        //float shad = iqshadow(p, normalize(lightpos-p), 0.01, 300.0);
-        //*
-        //vec3 fc = (lamb*1.0 + phong + glow) * AO * c * shad;
-        //**
-
+/*
         vec3 fc = 
                 (
                 mix(mix(texcol, c, 0.75), repidcol, 0.0)
 
-                + lamb * 0.5
-                + phong * 0.5
+                + lamb * 0.25
+                + phong * 0.25
                 )
                 * shad
                 * AO
+                //*stepbri
                 ;
-
+ */
+        //vec3 fc = lamb;
+        vec3 fc = phong;
+        //fc = vec3(AO);
         //vec3 fc = (1.0 - stepbri)*c  * shad;
 
         //vec3 fc = (phong*0.0 + lamb + ambient) * shad * texcol * AO + glow;
