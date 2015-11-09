@@ -100,11 +100,11 @@
     (q/hint :disable-depth-test)
     ;(frame-rate 120)
     (def console-font (q/load-font "data/FreeMono-16.vlw"))
-    (reset! tex1 (q/load-image "testpattern4po6.png"))
+    ;(reset! tex1 (q/load-image "testpattern4po6.png"))
     ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
     ;(reset! tex1 (q/load-image "uv_checker_large.png"))
     ;(reset! tex1 (q/load-image "Sky02.jpg"))
-    ;(reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
+    (reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
     ;(reset! tex1 (q/load-image "North_South_Panorama_Equirect_360x180.jpg"))
     ;(reset! tex1 (q/load-image "QueensPark.m.jpg"))
     ;(reset! tex1 (q/load-image "beach-hdr-blur128.jpg"))
@@ -244,19 +244,20 @@
          (if (state :render-paused?)
            (q/start-loop)
            (q/no-loop))
-        (update-in state [:render-paused?] not))
+         (update-in state [:render-paused?] not))
     \# (do
          (q/save-frame)
          state)
     \R (do (-> initial-state
                (assoc :aspect-ratio (/ (float (q/width)) (q/height)))))
-    \0 (do (-> initial-state
+    \0 (do (-> state
                (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
                (assoc-in [:camera :pos] [0.0 0.0 0.0])))
     \m (do (-> initial-state
                (update-in [:mousewarp] not)))
-    \` (do
-         state)
+    \` (do (-> state
+               (assoc-in [:current-shader :shaderobj]
+                         (q/load-shader (get-in state [:current-shader :path])))))
     \/ (do (-> state
                (next-shader)))
     state))
