@@ -996,7 +996,7 @@ void main(void) {
 
         vec3 fc = 
                 (
-                mix(mix(texcol, c, 0.9), repidcol, 0.0) * 0.333
+                //mix(mix(texcol, c, 0.9), repidcol, 0.0) * 0.333
                 //c * 0.333
                 + lamb * 0.333
                 + phong * 0.333 

@@ -464,7 +464,7 @@ void main(void) {
 
     vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
     vec3 glowcol = rainbow2_gradient(AO*1.0); //vec3(1.0, 1.0, 1.0);
-    c =  rainbow2_gradient(AO*1.0);
+    c =  rainbow2_gradient(AO*2.0);
 
 
     float cam_dist = length(cam_pos - p);
@@ -477,7 +477,7 @@ void main(void) {
     //texcol = sun(texcol, normalize(cam_pos-p), normalize(p-lightpos));
     //texcol = iqfog(texcol, cam_dist, normalize(p-cam_pos), normalize(p-lightpos));
     vec3 stepbri = vec3(nsteps/float(MAX_RAY_STEPS));
-    vec3 glow = stepbri * c * glow_intensity;
+    vec3 glow =  stepbri * c * glow_intensity;
     //vec3 glow_miss = vec3(nsteps/256.0) * glowcol_miss * glow_intensity;
     vec3 glow_miss = stepbri * c * glow_intensity;
 
@@ -504,7 +504,7 @@ void main(void) {
         //float shad = iqshadow(p, normalize(lightpos-p), 0.01, 300.0);
 
         vec3 fc = (
-                mix(texcol, c, 0.95)
+                mix(texcol, c, 0.5)
                 + lamb * 0.25
                 + phong * 0.25
                 )
@@ -512,7 +512,7 @@ void main(void) {
                 * AO
                 ;
         fc += glow;
-        //fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         fc = pow(fc, vec3(gamma));
         gl_FragColor = vec4(fc, 1.0);
     }
@@ -521,8 +521,8 @@ void main(void) {
         vec2 uv2 = (spher2.xy / vec2(2.0*PI, PI));
         uv2.y = 1.0 - uv2.y;
         vec3 texcol2 = texture2D(texture, uv2.xy).rgb;
-        vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
-        //vec3 bgcol = vec3(0.0,0.0,0.0);
+        //vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
+        vec3 bgcol = vec3(0.0,0.0,0.0);
         //bgcol = sun(bgcol, normalize(p-cam_pos), normalize(p-lightpos));
         bgcol += glow_miss;
         //bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
