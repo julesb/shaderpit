@@ -885,7 +885,8 @@ void main(void) {
         */
         vec3 lamb = amb_lamb + (1.0 - amb_lamb) * lambert(p, N, lightpos);
         //vec3 lamb = lambert(p, N, lightpos);
-        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, lightdir, 0.1, 200.0, 32.0);
+        float ldist = distance(p, lightpos);
+        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, lightdir, 0.1, ldist, 32.0);
 
         vec3 fc = 
                 (

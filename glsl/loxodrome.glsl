@@ -7,6 +7,9 @@ precision mediump int;
 
 #define MAX_RAY_STEPS 256
 #define SPREAD vec3(128.0, 0.0, 128.0)
+
+#define lightpos vec3(0.0,1.5,0.0)
+
 /*
    Based on tutorial at:
    http://www.geeks3d.com/20130524/building-worlds-with-distance-functions-in-glsl-raymarching-glslhacker-tutorial-opengl/
@@ -143,7 +146,8 @@ float sd_plane(in vec3 p, in vec3 n, in float o) {
 }
 
 vec2 obj_floor(in vec3 p) {
-    return vec2(p.y+0.0,4.0);
+    return vec2(sd_plane(p, vec3(0.0,1.0,0.0), 0.0), 4.0);
+    //return vec2(p.y+0.0,4.0);
 }
 
 vec2 obj_sphere(in vec3 p, float r) {
@@ -499,7 +503,7 @@ float ceilCustom(float x, float c) {
 float sdLoxodrome(vec3 p, float twist, float rotSymm, float thickness) {
 	const float pi = 3.14159265359;
 	vec3 s = rectToSpher(p);
-	s.y += time*0.001;
+	s.y += time*0.0005;
 	float offset = thickness * cos(s.z);
 	vec2 s1 = vec2(1.0 - offset, invSecIntegral((ceilCustom(secIntegral(s.z) * twist - s.y, pi * 2.0 / rotSymm) + s.y) / twist));
 	vec2 s2 = vec2(1.0 - offset, invSecIntegral((floorCustom(secIntegral(s.z) * twist - s.y, pi * 2.0 / rotSymm) + s.y) / twist));
@@ -518,15 +522,17 @@ float sdLoxodrome(vec3 p, float twist, float rotSymm, float thickness) {
    */
 
 vec2 distance_to_obj(in vec3 p) {
-    vec3 pr = rotate_x(p, PI*0.5);
+    vec3 pr = rotate_x(p-vec3(0.0,1.0,0.0), PI*0.5);
     vec2 scene1 = 
-        //op_sblend(p, 
-        op_union( 
-            obj_floor(p-vec3(0.0,-8.0, 0.0)),
-            vec2(sdLoxodrome(pr/4.0, 2.0, 4.0, 0.075)*4.0, 4.0)
+      //op_union(obj_sphere(p-lightpos, 0.025),
+        op_sblend(p, 
+        //op_union( 
+            obj_floor(p),
+            vec2(sdLoxodrome(pr*1.0, 4.0, 1.0, 0.01)*1.0, 5.0)
             //random_prim(prep-vec3(0.0,soff,0.0), obidx, id)
         )
-        * vec2(0.5, 1.0);
+        //)
+        * vec2(0.75, 1.0);
 
         return scene1;
 
@@ -652,11 +658,11 @@ vec3 iqfog( in vec3  rgb,      // original color of the pixel
             in float camdist, // camera to point distance
             in vec3  rayDir,   // camera to point vector
             in vec3  sunDir ) {// sun light direction
-    float fogAmount = 1.0 - exp( -camdist*0.0002512565125 );
+    float fogAmount = 1.0 - exp( -camdist*0.00512565125 );
     float sunAmount = max( dot( rayDir, sunDir ), 0.0 );
     vec3  fogColor  = mix( vec3(0.5,0.6,0.7), // bluish
                            vec3(1.0,0.9,0.7), // yellowish
-                           pow(sunAmount,256.0) );
+                           pow(sunAmount,1024.0) );
     return mix( rgb, fogColor, fogAmount );
     //return mix( fogColor, vec3(0.0,0.0,0.0), fogAmount );
 }
@@ -667,7 +673,7 @@ vec3 sun( in vec3  rgb,      // original color of the pixel
           in vec3  sunDir ) {// sun light direction
     //sunDir.y = abs(sunDir.y);
     float sunAmount = max( dot( rayDir, sunDir ), 0.0 );
-    vec3  sunColor  = vec3(1.0,0.9,0.8) * pow(sunAmount,1024.0);
+    vec3  sunColor  = vec3(1.0,0.9,0.8) * pow(sunAmount,32.0);
     return rgb + sunColor;
 }
 
@@ -753,10 +759,12 @@ void main(void) {
     //vec3 lightpos =  vec3(400.0,400.0,400.0);
     
     //vec3 lightpos = cam_pos + normalize(vpn)*1.0 + u*0.01;
-    vec3 lightpos = vec3(0.0, 3.0, 0.0);
+    //vec3 lightpos = cam_pos;
+    //vec3 lightpos = vec3(0.0, 1.5,  0.0);
+    //vec3 lightpos = vec3(0.0, 20.5,  0.0);
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=5000.0; //Max depth
+    const float maxd=1000.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 
@@ -803,8 +811,8 @@ void main(void) {
 */
     //AO = 1.0;
     //AO = getao(p, N) * 1.0;
-    vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
-    vec3 glowcol = (rainbow2_gradient(AO*1.0));// + vec3(1.0, 1.0, 1.0)) * 0.5 ;
+    vec3 glowcol_miss = rainbow2_gradient(AO*1.0+palette_offset);
+    vec3 glowcol = (rainbow2_gradient(AO*1.0+palette_offset));// + vec3(1.0, 1.0, 1.0)) * 0.5 ;
     //c = prim_color(p, d.y);
     //c = prim_color(p, mod(id.x*id.z, 12.0));
     
@@ -822,28 +830,13 @@ void main(void) {
     //texcol = sun(texcol, normalize(cam_pos-p), normalize(p-lightpos));
     //texcol = iqfog(texcol, cam_dist, normalize(p-cam_pos), normalize(p-lightpos));
     vec3 stepbri = vec3(nsteps/float(MAX_RAY_STEPS));
-    vec3 glow = stepbri * c * glow_intensity;
+    vec3 glow = glowcol * glow_intensity;
     //vec3 glow_miss = vec3(nsteps/256.0) * glowcol_miss * glow_intensity;
-    vec3 glow_miss = stepbri * c * glow_intensity;
+    vec3 glow_miss = glowcol_miss * glow_intensity;
 
     
     if (f < maxd) {
  
-        //float AO;
-        //c = pal(AO*2.0*PI, vec3(0.5), vec3(0.5), vec3(0.3, 0.3, 0.3), vec3(0.0,0.0,0.5) + 0.0 );
-
-        //vec3 dotfade = vec3(smoothstep(0.1, 0.5, f)) * c * vec3(hash(f))* f ;
-        //nsteps = nsteps / 256.0 ;
-        //vec3 glow = vec3(nsteps/256.0) *  vec3(0.8,0.8,1.0) * 1.0;
-        //vec3 glow = vec3(nsteps/256.0) * c * 1.0;
-
-        //simple phong lighting, LightPosition = CameraPosition
-        //gl_FragColor=vec4(glow, 1.0);
-        
-        
-        //vec3 fc = vec3(glow + dotfade * (b*c + pow(b,32.0)) * (1.0-f*0.01));
-        //vec3 fc = vec3(AO* (b*c + pow(b,32.0)) * (1.0-f*0.005));
-        //vec3 fc = vec3(0.0*glow + AO* c*1.0);
         vec3 ambient = vec3(0.15, 0.09, 0.08);
         float amb_shad =0.2;
         float amb_lamb = 0.0;
@@ -861,22 +854,25 @@ void main(void) {
         }
         vec3 lamb = amb_lamb + (1.0 - amb_lamb) * lambert(p, N, lightpos);
         //vec3 lamb = lambert(p, N, lightpos);
-        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, lightdir, 0.1, 200.0, 16.0);
+        float ldist = distance(p, lightpos);
+        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, lightdir, 0.01, ldist, 32.0);
+
 
         vec3 fc = 
                 (
-                //mix(mix(texcol, c, 1.0), repidcol, 0.0)
-                c * 0.333
+                mix(texcol, c, 0.0) 
+                //c * 0.333
                 + lamb * 0.333
                 + phong * 0.333
                 )
-                * vec3(shad)
+                * shad
                 * AO
-                //*stepbri
+                *stepbri
                 //+ambient
                 ;
 
-        //vec3 fc = stepbri;
+       
+        //vec3 fc = vec3(shad);;
         //vec3 fc = lamb;
         //vec3 fc = phong;
         //vec3 fc = vec3(AO);
@@ -889,7 +885,8 @@ void main(void) {
         //vec3 fc =  vec3(AO*AO*AO*AO) * c ; // * c + glow*shad;
         //vec3 fc =  vec3(AO)*stepbri*shad*c; 
         fc += glow;
-        fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        //fc = sun(fc, normalize(cam_pos-p), normalize(p-lightpos));
+        //fc = iqfog(fc, cam_dist, normalize(p-cam_pos), normalize(p-lightpos));
         fc = pow(fc, vec3(gamma));
         gl_FragColor = vec4(fc, 1.0);
         // *
@@ -903,15 +900,15 @@ void main(void) {
         vec2 uv2 = (spher2.xy / vec2(2.0*PI, PI));
         uv2.y = 1.0 - uv2.y;
         vec3 texcol2 = texture2D(texture, uv2.xy).rgb;
-        vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
-        //vec3 bgcol = vec3(0.0,0.0,0.0);
+        //vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
+        vec3 bgcol = vec3(0.0,0.0,0.0);
         //vec3 bgcol = vec3(0.5, 0.6,0.7); //rainbow2_gradient(1.0);
         //vec3 circ = get_integer_circles_color((-0.5+fract(uv2.xy))*16.0, vec3(1.0));
         //vec3 circ = get_grid_pixel_color((-0.5+fract(uv2.xy))*4.0);
         //bgcol += circ;
-        //bgcol = sun(bgcol, normalize(p-cam_pos), normalize(p-lightpos));
+        //bgcol = sun(bgcol, normalize(cam_pos-p), normalize(p-lightpos));
         bgcol += glow_miss;
-        bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        //bgcol = iqfog(bgcol, cam_dist, normalize(p-cam_pos), normalize(p-lightpos));
         bgcol = pow(bgcol, vec3(gamma));
         
         //bgcol = vec3(noise2d(scp.xy*100.0));

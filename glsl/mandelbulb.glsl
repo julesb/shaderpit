@@ -26,6 +26,7 @@ uniform float ray_hit_epsilon;
 uniform float palette_offset;
 uniform float gamma;
 uniform float glow_intensity;
+uniform float diff_spec;
 
 float PI=3.14159265;
 
@@ -197,7 +198,7 @@ vec2 distance_to_obj(in vec3 p) {
     return op_sblend(p,
              obj_floor(p), 
              op_sblend(p, vec2(sd_mandelbulb(p/MBULB_SCALE)*MBULB_SCALE, 1.0),
-                          obj_sphere(p, MBULB_SCALE * 0.75)));
+                          obj_sphere(p, MBULB_SCALE * 0.5)));
 }
 
 
@@ -287,6 +288,22 @@ vec3 prim_color(in vec3 p, float i) {
 vec3 lambert(vec3 p, vec3 n, vec3 l) {
     return vec3(max( dot(normalize(l-p), n), 0.0));
    // return clamp(vec3(dot(normalize(l-p), n)), 0.0, 1.0);
+}
+
+vec3 specular(in vec3 N, in vec3 L, in vec3 V) {
+   float shininess = 32.0;
+   float specularterm = 0.0;
+
+   // calculate specular reflection only if
+   // the surface is oriented to the light source
+   if(dot(N, L) > 0.0)
+   {
+      // half vector
+      vec3 H = normalize(L + V);
+      specularterm = pow(dot(N, H), shininess);  //
+   }
+    return vec3(1.0,0.9,0.8) * vec3(1.0,1.0,1.0) * specularterm;
+   //return u_matSpecularReflectance * u_lightSpecularIntensity * specularTerm;
 }
 
 
@@ -410,9 +427,12 @@ void main(void) {
 
     float lightspeed = 0.0125;
     float lightrad = 1500.0;
-    vec3 lightpos = cam_pos+vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
-                         3000.0,
-                         sin(PI/4.0 + framecount*lightspeed)*lightrad);
+//    vec3 lightpos = cam_pos+vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
+//                         3000.0,
+//                         sin(PI/4.0 + framecount*lightspeed)*lightrad);
+
+    vec3 lightpos = cam_pos + u*0.0 + v*-1.0; // + normalize(vpn)*2.0; // + u*2.0 + v*2.0;
+
     //vec3 lightpos = normalize(cam_pos*vec3(-1.0, 1.0, 1.0)) * 500.0;
     //vec3 lightpos =  vec3(400.0,400.0,400.0);
     
@@ -462,33 +482,33 @@ void main(void) {
     //AO = AO*AO*AO;
 
 
-    vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
-    vec3 glowcol = rainbow2_gradient(AO*1.0); //vec3(1.0, 1.0, 1.0);
-    c =  rainbow2_gradient(AO*2.0);
-
+    //vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
+    //vec3 glowcol = rainbow2_gradient(AO*1.0); //vec3(1.0, 1.0, 1.0);
+    c =  rainbow2_gradient(AO*1.0);
 
     float cam_dist = length(cam_pos - p);
     vec3 spher = to_spherical(reflect(normalize(p-cam_pos), N ));
     vec2 uv = spher.xy / vec2(2.0*PI, PI);
     uv.y = 1.0 - uv.y;
     vec3 texcol = texture2D(texture, uv).rgb;
-    //vec3 circ = get_integer_circles_color(uv, vec3(1.0));
-    //texcol += circ; 
     //texcol = sun(texcol, normalize(cam_pos-p), normalize(p-lightpos));
     //texcol = iqfog(texcol, cam_dist, normalize(p-cam_pos), normalize(p-lightpos));
     vec3 stepbri = vec3(nsteps/float(MAX_RAY_STEPS));
-    vec3 glow =  stepbri * c * glow_intensity;
-    //vec3 glow_miss = vec3(nsteps/256.0) * glowcol_miss * glow_intensity;
-    vec3 glow_miss = stepbri * c * glow_intensity;
+    vec3 glow =  c * stepbri * glow_intensity;
+    vec3 glow_miss = c * stepbri * glow_intensity;
 
     
     if (f < maxd) {
         vec3 ambient = vec3(0.15, 0.09, 0.08);
-        float amb_shad =0.1;
-        float amb_lamb = 0.1;
+        float amb_shad =0.2;
+        float amb_lamb = 0.0;
+
+        vec3 lightdir = normalize(lightpos - p);
+        vec3 spec = specular(N, lightdir, normalize(cam_pos-p));
 
         //vec3 cam_dist_sc = vec3(cam_dist/ 256.0);
-        float b=dot(N,normalize(lightpos-p));
+        float b=dot(N,lightdir);
+/*        
         vec3 phong;
         if (b < 0.0) {
             phong = vec3(0.0);
@@ -496,21 +516,27 @@ void main(void) {
         else {
             phong =  vec3((b + pow(b,64.0))); // * (1.0-f*0.005));
         }
+*/        
         //vec3 phong =  vec3((b + pow(b,8.0))); // * (1.0-f*0.005));
         vec3 lamb = amb_lamb + (1.0 - amb_lamb) * lambert(p, N, lightpos);
         //vec3 lamb = lambert(p, N, lightpos);
-        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, normalize(lightpos-p), 0.1, 200.0, 16.0);
+        float ldist = distance(p, lightpos);
+        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, normalize(lightpos-p), 0.01, ldist, 16.0);
         //float shad = iqsoftshadow(p, normalize(lightpos-p), 0.1, 300.0, 32.0);
         //float shad = iqshadow(p, normalize(lightpos-p), 0.01, 300.0);
 
         vec3 fc = (
-                mix(texcol, c, 0.5)
-                + lamb * 0.25
-                + phong * 0.25
-                )
+                  mix(texcol, c, 1.0)
+                + mix(lamb, spec, diff_spec)
+                + ambient
+                //+ lamb * 0.25
+                //+ phong * 0.25
+                ) * 0.75 
                 * shad
                 * AO
                 ;
+
+        //vec3 fc = vec3(phong+lamb+c*(1.0-stepbri))*0.25 * AO * shad;
         fc += glow;
         fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         fc = pow(fc, vec3(gamma));
@@ -524,8 +550,8 @@ void main(void) {
         //vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
         vec3 bgcol = vec3(0.0,0.0,0.0);
         //bgcol = sun(bgcol, normalize(p-cam_pos), normalize(p-lightpos));
-        bgcol += glow_miss;
         //bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        bgcol += glow_miss;
         bgcol = pow(bgcol, vec3(gamma));
         gl_FragColor=vec4(bgcol.rgb,1.0); //background color
     }

@@ -588,11 +588,11 @@ vec2 noise_placement(vec3 p, float n) {
     for (i=0.0; i < n; i++) {
         pos = vec3(noise(i+sec), 0.5, noise(i+sec+1.3323));
         pos -= 0.5;
-        pos *= vec3(400.0, 0.0, 400.0);
-        pos += vec3(0.0,24.0,0.0);
+        pos *= vec3(300.0, 0.0, 300.0);
+        pos += vec3(0.0,40.0,0.0);
         //d = min(d, obj_sphere(p-pos, 24.0).x);
-        d = smin(d, random_prim(p-pos, i*0.1).x, blend_coef);
-        //d = smin(d, obj_sphere(p-pos, 40.0).x, blend_coef);
+        //d = smin(d, random_prim(p-pos, i*0.1).x, blend_coef);
+        d = smin(d, obj_sphere(p-pos, 40.0).x, blend_coef);
         c = prim_color(p-pos, i);
     }
     return vec2(d, 5.0);
@@ -632,7 +632,7 @@ vec2 distance_to_obj(in vec3 p) {
                   //op_sblend(p, 
                                obj_floor(p),
                                //obj_sphere(p, 4.0));
-                               noise_placement(p, 6.0));
+                               noise_placement(p, 5.0));
                   //             cube_field(prep, obidx, id, soff))
 
                 //* vec2(0.5, 1.0);
@@ -785,7 +785,7 @@ float getao(vec3 p, vec3 n) {
 float calcAO( in vec3 pos, in vec3 nor ) {
 	float occ = 0.0;
     float sca = 1.0;
-    for( int i=0; i<5; i++ ) {
+    for( int i=0; i<4; i++ ) {
         float hr = 0.01 + float(i)/0.0525;
         //float hr = 0.01 + 0.12*float(i)/4.0;
         vec3 aopos =  nor * hr + pos;
@@ -839,20 +839,20 @@ void main(void) {
 
     float lightspeed = 0.0125;
     float lightrad = 2500.0;
-    
+/*    
     vec3 lightpos = cam_pos+vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
                          3000.0,
                          sin(PI/4.0 + framecount*lightspeed)*lightrad);
-    
+*/    
     //vec3 lightpos = vec3(cam_pos.x,500.0,cam_pos.z);
     //vec3 lightpos = normalize(cam_pos*vec3(-1.0, 1.0, 1.0)) * 500.0;
-    //vec3 lightpos =  vec3(400.0,400.0,400.0);
+    vec3 lightpos =  vec3(0.0,100.0,0.0);
     
     //vec3 lightpos = cam_pos + normalize(vpn)*1.0 + u*0.01;
 
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=10000.0; //Max depth
+    const float maxd=1000.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 
@@ -943,7 +943,7 @@ void main(void) {
         }
         vec3 lamb = amb_lamb + (1.0 - amb_lamb) * lambert(p, N, lightpos);
         //vec3 lamb = lambert(p, N, lightpos);
-        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, lightdir, 0.1, 200.0, 32.0);
+        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, lightdir, 0.1, 800.0, 32.0);
 
         vec3 fc = 
                 (
