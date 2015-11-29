@@ -31,11 +31,12 @@ uniform float ray_hit_epsilon;
 uniform float palette_offset;
 uniform float gamma;
 uniform float glow_intensity;
+uniform float diff_spec;
 
 float PI=3.14159265;
 
 const float NOISE_DETAIL =0.01;
-const float NOISE_DETAIL2 =0.2;
+const float NOISE_DETAIL2 =0.3;
 
 //const float MB_INNER_SPHERE = 0.72;
 //const float MBOX_SCALE = 8.0;
@@ -302,6 +303,22 @@ vec3 rotate_z(in vec3 p, float an) {
 
 vec3 get_rep_id(vec3 p, vec3 spread) {
     return floor((p+spread*0.5) / spread);
+}
+
+vec3 get_integer_circles_color(vec2 c, vec3 col) {
+    vec3 pixel;
+    vec3 basecol = col; //vec4(1.0, 1.0, 0.75, 1.0);
+    float line_width = 0.1;
+    float dnorm = length(c);
+    float nearest_int = abs(dnorm-float(round(dnorm)));
+    if (nearest_int < line_width) {
+        float a =  1.0 - nearest_int/line_width;
+        pixel = vec3(a,a,a) * basecol;
+    }
+    else {
+        pixel = vec3(0.0,0.0,0.0);
+    }
+    return pixel;
 }
 
 vec2 obj_ufo(vec3 p) {
@@ -588,11 +605,11 @@ vec2 distance_to_obj(in vec3 p) {
     //p = rotate_y(p, framecount * 0.01);
     vec3 id = get_rep_id(p, SPREAD);
     vec3 prep = op_rep(p, SPREAD);
-    float t = framecount / 5.0;// * 2.0 * PI;
+    float t = framecount / 20.0;// * 2.0 * PI;
     //float h = hash(id.x*id.y) * 0.5 + 0.5;
     float sig = (int(id.x*id.y) % 2  == 0)? -1.0:1.0;
-    //float phase = noise2d(id.xz * NOISE_DETAIL2) * 2.0 * PI + (sig*PI*1.0);
-    float phase = hash(id.x*id.z) * 2.0 * PI;
+    float phase = noise2d(id.xz * NOISE_DETAIL2) * 2.0 * PI; // + (sig*PI*1.0);
+    //float phase = hash(id.x*id.z) * 2.0 * PI;
     float soff = ((sin(t+phase)* 0.5 + 0.5)) * 64.0 - 32.0;
     //float obidx =  hash(id.x*id.z); // * 0.5 + 0.5;
     float obidx =  noise2d(id.xz * NOISE_DETAIL2); // * 0.5 + 0.5;
@@ -761,6 +778,22 @@ vec3 lambert(vec3 p, vec3 n, vec3 l) {
    // return clamp(vec3(dot(normalize(l-p), n)), 0.0, 1.0);
 }
 
+vec3 specular(in vec3 N, in vec3 L, in vec3 V) {
+   float shininess = 32.0;
+   float specularterm = 0.0;
+
+   // calculate specular reflection only if
+   // the surface is oriented to the light source
+   if(dot(N, L) > 0.0)
+   {
+      // half vector
+      vec3 H = normalize(L + V);
+      specularterm = pow(dot(N, H), shininess);  //
+   }
+    return vec3(1.0,0.9,0.8) * vec3(1.0,1.0,1.0) * specularterm;
+   //return u_matSpecularReflectance * u_lightSpecularIntensity * specularTerm;
+}
+
 
 // http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
 
@@ -854,6 +887,7 @@ vec3 getNormal( in vec3 p ) {
 }
 
 
+
 void main(void) {
     vec2 q = vertTexCoord.st;
     vec2 vPos = -vec2(aspect_ratio, 1.0) + 2.0 * q;
@@ -882,20 +916,20 @@ void main(void) {
 
     float lightspeed = 0.0; //0.0125;
     float lightrad = 1500.0;
-    
+   
     vec3 lightpos = cam_pos+vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
                          3000.0,
                          sin(PI/4.0 + framecount*lightspeed)*lightrad);
-    
+
     //vec3 lightpos = vec3(cam_pos.x,500.0,cam_pos.z);
     //vec3 lightpos = normalize(cam_pos*vec3(-1.0, 1.0, 1.0)) * 500.0;
     //vec3 lightpos =  vec3(400.0,400.0,400.0);
     
-    //vec3 lightpos = cam_pos + normalize(vpn)*1.0 + u*0.01;
+    //vec3 lightpos = cam_pos + normalize(vpn)*1.0 + u*50.0-v*50.0;
 
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=10000.0; //Max depth
+    const float maxd=1000.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 
@@ -975,37 +1009,37 @@ void main(void) {
     
     if (f < maxd) {
  
-        vec3 ambient = vec3(0.07, 0.08, 0.09);
-        float amb_shad =0.2;
-        float amb_lamb = 0.0;
+        vec3 ambient = vec3(0.1, 0.1, 0.1);
+
+        float amb_shad =0.5;
+        float amb_lamb = 0.2;
 
         vec3 lightdir = normalize(lightpos - p);
-
-        //vec3 cam_dist_sc = vec3(cam_dist/ 256.0);
         float b = dot(N, lightdir);
-        vec3 phong;
-        if (b < 0.0) {
-            phong = vec3(0.0);
-        }
-        else {
-            phong =  vec3((b + pow(b,64.0))); // * (1.0-f*0.005));
-        }
+
+        vec3 spec = specular(N, lightdir, normalize(cam_pos-p));
+
         vec3 lamb = amb_lamb + (1.0 - amb_lamb) * lambert(p, N, lightpos);
-        //vec3 lamb = lambert(p, N, lightpos);
-        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, lightdir, 0.1, 200.0, 32.0);
+        //vec3 lamb = 0.5 * lambert(p, N, lightpos);
+        float ldist = distance(p, lightpos);
+        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, lightdir, 0.01, ldist, 32.0);
+        //float shad = iqsoftshadow(p, lightdir, 0.1, ldist, 32.0);
 
         vec3 fc = 
                 (
-                //mix(mix(texcol, c, 0.9), repidcol, 0.0) * 0.333
-                //c * 0.333
-                + lamb * 0.333
-                + phong * 0.333 
-                )
-                * vec3(shad)
+                mix(texcol, c, 1.0) //0.6 + b*0.4)
+                + mix(lamb, spec, diff_spec)
+                //+ ambient
+                //+ stepbri*c
+                ) * 0.5
+                * (shad) // vec3(shad)
                 * AO
-                //* stepbri
-                +ambient
+                //* (stepbri)
+                //+ambient
                 ;
+
+        //vec3 fc = lamb;
+
         fc += glow;
         fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         fc = pow(fc, vec3(gamma));
@@ -1024,7 +1058,7 @@ void main(void) {
         //bgcol += circ;
         //bgcol = sun(bgcol, normalize(p-cam_pos), normalize(p-lightpos));
         bgcol += glow_miss;
-        bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        //bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         bgcol = pow(bgcol, vec3(gamma));
         
         //bgcol = vec3(noise2d(scp.xy*100.0));
