@@ -58,6 +58,7 @@
       )
   ))
 
+
 (def initial-camera {
   :pos [128.0 50.0 0.0]
   :lookat [0.0 0.0 0.0]
@@ -72,6 +73,7 @@
   :palette_offset 0.0
   :gamma 0.55
   :glow-intensity 0.0
+  :diff-spec 0.5 
 })
 
 (def initial-state {
@@ -109,7 +111,7 @@
     ;(reset! tex1 (q/load-image "QueensPark.m.jpg"))
     ;(reset! tex1 (q/load-image "beach-hdr-blur128.jpg"))
     ;(reset! tex1 (q/load-image "cubesphere.jpg"))
-    ;(reset! tex1 (q/load-image "stereographic.jpg"))
+   ; (reset! tex1 (q/load-image "stereographic.jpg"))
     ;(reset! tex1 (q/load-image "cave_texture_01-512x512.png"))
     ;(reset! tex1 (q/load-image "seamless-black-wall-texture-decorating-inspiration-1.jpg"))
     ;(reset! tex1 (q/load-image "beach-hdr.jpg"))
@@ -154,6 +156,7 @@
       (.set shader "palette_offset" (float (get-in state [:params :palette_offset] 0.0)))
       (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
       (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
+      (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
       (.set shader "time" (float (q/millis)))
 
       )
@@ -199,13 +202,15 @@
           \- (fn [s] (update-in s [:camera :fov] #(* % 0.9)))
           \= (fn [s] (update-in s [:camera :fov] #(/ % 0.9)))
           \[ (fn [s] (update-in s [:params :ray_hit_epsilon] #(* % 0.9)))
-          \] (fn [s] (update-in s [:params :ray_hit_epsilon] #(/ % 0.9)))
+          \] (fn [s] (update-in s [:params :ray_hit_epsilon] #(min 0.01 (/ % 0.9))))
           \3 (fn [s] (update-in s [:params :palette_offset] #(- % 0.05)))
           \4 (fn [s] (update-in s [:params :palette_offset] #(+ % 0.05)))
           \5 (fn [s] (update-in s [:params :gamma] #(- % 0.01)))
           \6 (fn [s] (update-in s [:params :gamma] #(+ % 0.01)))
           \7 (fn [s] (update-in s [:params :glow-intensity] #(- % 0.1)))
           \8 (fn [s] (update-in s [:params :glow-intensity] #(+ % 0.1)))
+          \l (fn [s] (update-in s [:params :diff-spec] #(max 0.0 (- % 0.05))))
+          \p (fn [s] (update-in s [:params :diff-spec] #(min 1.0 (+ % 0.05))))
          }]
   (if (contains? key-movement-map keychar)
     (-> ((key-movement-map keychar) state)
@@ -240,7 +245,7 @@
 
 (defn key-typed [state event]
   (case (event :raw-key)
-    \p (do
+    \  (do
          (if (state :render-paused?)
            (q/start-loop)
            (q/no-loop))
@@ -253,7 +258,7 @@
     \0 (do (-> state
                (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
                (assoc-in [:camera :pos] [0.0 0.0 0.0])))
-    \m (do (-> initial-state
+    \m (do (-> state
                (update-in [:mousewarp] not)))
     \` (do (-> state
                (assoc-in [:current-shader :shaderobj]
@@ -287,7 +292,7 @@
 
 (defn draw-info [state x y]
   (q/text-font console-font)
-  (let [line-space 24
+  (let [line-space 20
         ar (get state :aspect-ratio 0.0)
         [mx my] (state :mouse-position)
         zoom (get state :zoom 0.0)
@@ -300,6 +305,8 @@
         gamma (get-in state [:params :gamma] 0.0)
         glow (get-in state [:params :glow-intensity] 0.0)
         shadername (get-in state [:current-shader :name] "-")
+        pal-off (get-in state [:params :palette_offset] 0.0)
+        diff_spec (get-in state [:params :diff-spec] 0.5)
         lines [
                ;(str "state: " state)
                (str "shader: " shadername)
@@ -312,12 +319,20 @@
                (str (format "blend: %.2f" blend))
                (str (format "gamma: %.2f" gamma))
                (str (format "glow: %.2f" glow))
+               (str (format "pal: %.2f" pal-off))
+               (str (format "d/s: %.2f" diff_spec))
                ;(str "camera: " (state :camera))
                (str (format "fps: %.2f" (float (q/current-frame-rate))))
                ]]
     (q/fill 255 255 255 255)
     (doseq [i (range (count lines))]
+      (q/fill 0 0 0 128)
+      (q/rect (- x 6) (- (+ y (* i line-space)) 12)
+              (+ (q/text-width (lines i)) 12) 16 9)
+      (q/fill 255 255 255 255)
       (q/text (lines i) x (+ y (* i line-space))))))
+    ;(doseq [i (range (count lines))]
+    ;  (q/text (lines i) x (+ y (* i line-space))))))
 
 
 (defn draw-quad [state ar]
