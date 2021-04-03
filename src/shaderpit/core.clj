@@ -2,13 +2,21 @@
   (:require [quil.core :as q]
             [quil.middleware :as m])
   (:use [shaderpit.vector])
-  (:import java.awt.event.KeyEvent)
-  )
+  (:import java.awt.event.KeyEvent
+           (java.awt Robot)
+           (java.awt MouseInfo)
+  ))
 
 (def ^:dynamic console-font)
 (def tex1 (atom nil))
 (def tex2 (atom nil))
 (def ^:const PI Math/PI)
+(def ^:const TWOPI (* PI 2.0))
+(def ^:const SMALLPI (* PI 0.99))
+
+(def robot (new Robot))
+(def global-mouse (atom [0 0]))
+(def global-pmouse (atom [0 0]))
 
 ; =========================================================================
 
@@ -61,6 +69,10 @@
 
 (def initial-camera {
   :pos [128.0 50.0 0.0]
+  :az 0.0
+  :alt 0.0
+  :az-vel 0.0
+  :alt-vel 0.0
   :lookat [0.0 0.0 0.0]
   :vpn [0.0 0.0 -1.0]
   :fov (/ Math/PI 3.0)
@@ -79,6 +91,7 @@
 (def initial-state {
   :keys-down #{}
   :mouse-position [0 0]
+  ;:mouse-delta [0 0]
   :mousewarp true
   :aspect-ratio 1.0
   :render-paused? false
@@ -106,12 +119,13 @@
     ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
     ;(reset! tex1 (q/load-image "uv_checker_large.png"))
     ;(reset! tex1 (q/load-image "Sky02.jpg"))
-    (reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
+    ;(reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
     ;(reset! tex1 (q/load-image "North_South_Panorama_Equirect_360x180.jpg"))
     ;(reset! tex1 (q/load-image "QueensPark.m.jpg"))
     ;(reset! tex1 (q/load-image "beach-hdr-blur128.jpg"))
     ;(reset! tex1 (q/load-image "cubesphere.jpg"))
-   ; (reset! tex1 (q/load-image "stereographic.jpg"))
+    ;(reset! tex1 (q/load-image "stereographic.jpg"))
+    (reset! tex1 (q/load-image "sphere_map_floor_gradient.jpg"))
     ;(reset! tex1 (q/load-image "cave_texture_01-512x512.png"))
     ;(reset! tex1 (q/load-image "seamless-black-wall-texture-decorating-inspiration-1.jpg"))
     ;(reset! tex1 (q/load-image "beach-hdr.jpg"))
@@ -125,6 +139,8 @@
          (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
 
          )
+
+    ;(.mouseMove robot (int (/ (q/screen-width) 2)) (int (/ (q/screen-height) 2)))
   ))
 
 
@@ -157,16 +173,21 @@
       (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
       (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
       (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
-      (.set shader "time" (float (q/millis)))
+      (.set shader "time" (float (/ (q/millis) 1000.0)))
 
       )
     state))
 
 
-;(def speed 0.025)
-;(def turbospeed 1.5)
+(defn get-global-mouse []
+  (let [pi (MouseInfo/getPointerInfo)
+        loc (.getLocation pi)
+        pos [(.x loc) (.y loc)]]
+    pos))
 
-(defn camera-mouse-update [state]
+
+
+(defn camera-mouse-update-orig [state]
   (let [[mx my] (vec2-mul (vec2-sub (state :mouse-position) [0.5 0.5])
                           [(* PI 2.0) (* PI 0.99)])
         pos (get-in state [:camera :pos] [0.0 0.0 0.0])
@@ -177,6 +198,44 @@
         new-cam (-> (state :camera)
                     (assoc :vpn vpn)
                     (assoc :lookat lookat)) ]
+  (-> state
+      (assoc :camera new-cam))))
+
+
+(defn camera-mouse-update [state]
+  (let [cam (state :camera)
+        [mx my] (vec2-scale (vec2-sub (get-global-mouse)
+                                      [(int (/ (q/screen-width) 2))
+                                       (int (/ (q/screen-height) 2))])
+                            0.001)
+        az (+ (cam :az) mx)
+        alt (+ (cam :alt) my)
+        az (if (>= az TWOPI)
+             (- az TWOPI)
+             (if (< az 0.0)
+              (+ az TWOPI)
+              az))
+        spi2 (* SMALLPI 0.5)
+        alt (if (>= alt spi2)
+             spi2
+             (if (<= alt (- spi2))
+              (- spi2)
+              alt))
+        vpn (vec3-normalize [(* (Math/cos alt) (Math/cos az))
+                             (Math/sin alt)
+                             (* (Math/cos alt) (Math/sin az))])
+        lookat (vec3-add (cam :pos) (vec3-scale vpn 6.0))
+        new-cam (-> (state :camera)
+                    (assoc :az az)
+                    (assoc :alt alt)
+                    (assoc :vpn vpn)
+                    (assoc :lookat lookat)
+                    (assoc :mousewarp-reset true)
+                    ) ]
+
+  (when (and (state :mousewarp) (q/focused))
+      (.mouseMove robot (int (/ (q/screen-width) 2))
+                        (int (/ (q/screen-height) 2))))
   (-> state
       (assoc :camera new-cam))))
 
@@ -238,7 +297,7 @@
           (assoc :keys-down (conj (state :keys-down) the-raw-key))))))
       
 
-(defn key-released [state]
+(defn key-released [state e]
   (-> state
       (assoc :keys-down (disj (state :keys-down) (q/raw-key)))))
 
@@ -247,8 +306,12 @@
   (case (event :raw-key)
     \  (do
          (if (state :render-paused?)
-           (q/start-loop)
-           (q/no-loop))
+           (do 
+             (q/start-loop)
+             (q/no-cursor))
+           (do
+             (q/no-loop)
+             (q/cursor)))
          (update-in state [:render-paused?] not))
     \# (do
          (q/save-frame)
@@ -258,8 +321,12 @@
     \0 (do (-> state
                (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
                (assoc-in [:camera :pos] [0.0 0.0 0.0])))
-    \m (do (-> state
-               (update-in [:mousewarp] not)))
+    \m (do
+         (if (state :mousewarp)
+           (q/cursor)
+           (q/no-cursor)) 
+         (-> state
+             (update-in [:mousewarp] not)))
     \` (do (-> state
                (assoc-in [:current-shader :shaderobj]
                          (q/load-shader (get-in state [:current-shader :path])))))
@@ -269,18 +336,24 @@
 
 
 (defn mouse-moved [state event]
-    (-> state
-        (assoc :mouse-position [(/ (event :x) (q/width))
-                                (/ (event :y) (q/height))])
-        (camera-mouse-update)
-        ))
+  (let [pos (get-global-mouse)
+       new-state (-> state
+        (assoc :mouse-position [(int (/ (event :x) (q/width)))
+                              (int (/ (event :y) (q/height)))])
+        ;(assoc :mouse-delta (vec2-sub pos @global-pmouse))
+      ;(assoc :mouse-delta [(- (q/mouse-x) (q/pmouse-x))
+      ;                     (- (q/mouse-y) (q/pmouse-y))])
+        (camera-mouse-update))
+       
+       ]
+  ;(reset! global-pmouse pos)
+  new-state
+    ))
 
 
 (defn mouse-dragged [state event]
     (-> state
         (assoc :mouse-position [(event :x) (event :y)])))
-
-
 
 
 (defn update [state]
@@ -297,6 +370,8 @@
         [mx my] (state :mouse-position)
         zoom (get state :zoom 0.0)
         pos (get-in state [:camera :pos] [0.0 0.0 0.0])
+        az (get-in state [:camera :az] 0.0)
+        alt (get-in state [:camera :alt] 0.0)
         speed (get-in state [:camera :speed] 0.0)
         fov (get-in state [:camera :fov] 0.0)
         fovdeg (/ (* fov 180.0) Math/PI)
@@ -309,8 +384,11 @@
         diff_spec (get-in state [:params :diff-spec] 0.5)
         lines [
                ;(str "state: " state)
+               (str (format "dim: %dx%d" (q/width) (q/height)))
                (str "shader: " shadername)
                (str "pos: " (vec3-format pos))
+               (str (format "az: %.2f" az))
+               (str (format "alt: %.2f" alt))
                (str (format "mouse: [%.2f %.2f]" (float mx) (float my)))
                (str (format "speed: %.6f" speed))
                (str (format "ar: %.2f" ar))
@@ -346,10 +424,9 @@
   (q/end-shape))
 
 
-
 (defn draw [state]
   ;(q/ortho)
-  ;(q/no-lights)
+  (q/no-lights)
   (let [c [(* (q/width) 0.5)
            (* (q/height) 0.5)]]
     (q/with-translation c
@@ -361,7 +438,7 @@
       )
     )
   (q/reset-shader) 
-  (draw-info state 32 (- (q/height) 250))
+  (draw-info state 32 (- (q/height) 320))
   )
 
 
@@ -370,12 +447,13 @@
     :title "shader sandpit"
     :setup setup
     :draw draw
-    ;:size [1900 1100]
-    :size [1440 800]
+    :size [1920 1080]
+    ;:size [1440 800]
     ;:size :fullscreen
-    ;:features [:present
-    ;           :resizable]
- 
+    :features [:resizable]
+    ;:features [:present :resizable]
+    ;:settings #(q/pixel-density 2)
+    ;:settings #(q/pixel-density (q/display-density)) 
     :renderer :p2d
     ;:renderer :opengl
     :key-typed key-typed
@@ -389,5 +467,13 @@
     :middleware [m/fun-mode]
     ))
 
+
+(defn get-state [& prop]
+  ;@((meta shaderpit) :state)
+  (if prop
+    (get-in @((meta shaderpit) :state) prop)
+     @((meta shaderpit) :state))
+
+  )
 
 ;(-main)
