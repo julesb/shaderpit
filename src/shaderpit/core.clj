@@ -5,6 +5,7 @@
   (:import java.awt.event.KeyEvent
            (java.awt Robot)
            (java.awt MouseInfo)
+           (java.lang System)
   ))
 
 (def ^:dynamic console-font)
@@ -18,6 +19,10 @@
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
 
+(def t-init (atom 0.0))
+(def t (atom 0.0))
+(def t-delta (atom 0.0))
+
 ; =========================================================================
 
 (def default-shader {
@@ -28,6 +33,15 @@
   :shaderobj nil
   })
 
+(defn ns-time []
+  (- (double (/ (System/nanoTime) 1000000000.0)) @t-init))
+
+(defn ns-time-reset []
+  (reset! t-init 0.0)
+  (reset! t-init (ns-time))
+  (reset! t @t-init)
+  (reset! t-delta 0.0)
+)
 
 (defn define-shader
   [& {:keys [id name path type]
@@ -76,7 +90,9 @@
   :lookat [0.0 0.0 0.0]
   :vpn [0.0 0.0 -1.0]
   :fov (/ Math/PI 3.0)
+  :vel 0.0
   :speed 0.5
+  :damping 0.9
 })
 
 (def initial-params {
@@ -132,7 +148,8 @@
     ;(reset! tex1 (q/load-image "studio010.jpg"))
     
     ;(reset! texture-shader (load-shader "data/texfrag.glsl" "data/texvert.glsl"))
-
+    ;(reset! t-init (ns-time))
+    (ns-time-reset)
     (-> initial-state
          (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
          (assoc :shaders shaderlist)
@@ -140,7 +157,6 @@
 
          )
 
-    ;(.mouseMove robot (int (/ (q/screen-width) 2)) (int (/ (q/screen-height) 2)))
   ))
 
 
@@ -173,7 +189,8 @@
       (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
       (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
       (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
-      (.set shader "time" (float (/ (q/millis) 1000.0)))
+      (.set shader "time" (float @t))
+      ;(.set shader "time" (float (/ (q/millis) 1000.0)))
 
       )
     state))
@@ -186,8 +203,7 @@
     pos))
 
 
-
-(defn camera-mouse-update-orig [state]
+(defn camera-update-orig [state]
   (let [[mx my] (vec2-mul (vec2-sub (state :mouse-position) [0.5 0.5])
                           [(* PI 2.0) (* PI 0.99)])
         pos (get-in state [:camera :pos] [0.0 0.0 0.0])
@@ -202,14 +218,20 @@
       (assoc :camera new-cam))))
 
 
-(defn camera-mouse-update [state]
+(defn camera-update [state]
   (let [cam (state :camera)
         [mx my] (vec2-scale (vec2-sub (get-global-mouse)
                                       [(int (/ (q/screen-width) 2))
                                        (int (/ (q/screen-height) 2))])
-                            0.001)
-        az (+ (cam :az) mx)
-        alt (+ (cam :alt) my)
+                            0.005)
+        az-vel  (+ (* (cam :az-vel)(cam :damping))
+                   (* mx @t-delta))
+        alt-vel (+ (* (cam :alt-vel)(cam :damping))
+                   (* my @t-delta))
+        az (+ (cam :az) az-vel)
+        alt (+ (cam :alt) alt-vel)
+        ;az (+ (cam :az) mx)
+        ;alt (+ (cam :alt) my)
         az (if (>= az TWOPI)
              (- az TWOPI)
              (if (< az 0.0)
@@ -228,6 +250,8 @@
         new-cam (-> (state :camera)
                     (assoc :az az)
                     (assoc :alt alt)
+                    (assoc :az-vel az-vel)
+                    (assoc :alt-vel alt-vel)
                     (assoc :vpn vpn)
                     (assoc :lookat lookat)
                     (assoc :mousewarp-reset true)
@@ -245,7 +269,8 @@
         wup [0.0 -1.0 0.0] ; world up
         vpn (get-in state [:camera :vpn])
         vpv (vec3-normalize (vec3-cross (get-in state [:camera :vpn]) [0.0 -1.0 0.0]))
-        speed (get-in state [:camera :speed])
+        speed (* (get-in state [:camera :speed]) @t-delta)
+        ;speed (get-in state [:camera :speed])
         ;vpu (vec3-normalize (vec3-cross vpn vpv)) ;viewplane up
         key-movement-map {
           \w (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale vpn speed))))
@@ -271,9 +296,11 @@
           \l (fn [s] (update-in s [:params :diff-spec] #(max 0.0 (- % 0.05))))
           \p (fn [s] (update-in s [:params :diff-spec] #(min 1.0 (+ % 0.05))))
          }]
+    ;state))
   (if (contains? key-movement-map keychar)
     (-> ((key-movement-map keychar) state)
-        (camera-mouse-update))
+        ;;(camera-update)
+        )
     state)))
 
 
@@ -312,7 +339,9 @@
            (do
              (q/no-loop)
              (q/cursor)))
-         (update-in state [:render-paused?] not))
+         (-> state
+          (update-in [:render-paused?] not)
+          (assoc-in [:mousewarp] (state :render-paused?))))
     \# (do
          (q/save-frame)
          state)
@@ -327,10 +356,12 @@
            (q/no-cursor)) 
          (-> state
              (update-in [:mousewarp] not)))
-    \` (do (-> state
+    \` (do (ns-time-reset)
+            (-> state
                (assoc-in [:current-shader :shaderobj]
                          (q/load-shader (get-in state [:current-shader :path])))))
-    \/ (do (-> state
+    \/ (do (ns-time-reset)
+            (-> state
                (next-shader)))
     state))
 
@@ -343,7 +374,8 @@
         ;(assoc :mouse-delta (vec2-sub pos @global-pmouse))
       ;(assoc :mouse-delta [(- (q/mouse-x) (q/pmouse-x))
       ;                     (- (q/mouse-y) (q/pmouse-y))])
-        (camera-mouse-update))
+        ;(camera-update)
+        )
        
        ]
   ;(reset! global-pmouse pos)
@@ -357,8 +389,13 @@
 
 
 (defn update [state]
+  (let [t-new (ns-time)]
+    (reset! t-delta (- t-new @t))
+    (reset! t t-new))
+
   (-> state
       (do-movement-keys)
+      (camera-update)
       (update-uniforms! (get-in state [:current-shader :shaderobj]))
   ))
 
@@ -384,6 +421,8 @@
         diff_spec (get-in state [:params :diff-spec] 0.5)
         lines [
                ;(str "state: " state)
+               (str (format "time %.5f" @t))
+               (str (format "dt %.5f" @t-delta))
                (str (format "dim: %dx%d" (q/width) (q/height)))
                (str "shader: " shadername)
                (str "pos: " (vec3-format pos))
@@ -425,8 +464,6 @@
 
 
 (defn draw [state]
-  ;(q/ortho)
-  (q/no-lights)
   (let [c [(* (q/width) 0.5)
            (* (q/height) 0.5)]]
     (q/with-translation c
@@ -438,7 +475,7 @@
       )
     )
   (q/reset-shader) 
-  (draw-info state 32 (- (q/height) 320))
+  (draw-info state 32 (- (q/height) 350))
   )
 
 
