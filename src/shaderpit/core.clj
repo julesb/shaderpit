@@ -8,6 +8,7 @@
            (java.lang System)
   ))
 
+
 (def ^:dynamic console-font)
 (def tex1 (atom nil))
 (def tex2 (atom nil))
@@ -19,10 +20,6 @@
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
 
-(def t-init (atom 0.0))
-(def t (atom 0.0))
-(def t-delta (atom 0.0))
-
 ; =========================================================================
 
 (def default-shader {
@@ -33,15 +30,24 @@
   :shaderobj nil
   })
 
-(defn ns-time []
-  (- (double (/ (System/nanoTime) 1000000000.0)) @t-init))
+(defn ns-time [state]
+  (- (double (/ (System/nanoTime) 1000000000.0)) (state :t-init)))
 
-(defn ns-time-reset []
-  (reset! t-init 0.0)
-  (reset! t-init (ns-time))
-  (reset! t @t-init)
-  (reset! t-delta 0.0)
-)
+
+(defn clock-reset [state]
+  (-> state
+      (assoc :t-init 0.0)
+      (assoc :t-now (ns-time state))
+      (assoc :t-delta 0.0)))
+
+
+(defn clock-tick [state]
+  (let [t-new (ns-time state)
+        dt (- t-new (state :t-now))]
+    (-> state
+      (assoc :t-now t-new)
+      (assoc :t-delta dt))))
+
 
 (defn center-cursor []
   (.mouseMove robot (int (/ (q/screen-width) 2))
@@ -95,12 +101,12 @@
   :vpn [0.0 0.0 -1.0]
   :fov (/ Math/PI 3.0)
   :vel 0.0
-  :speed 0.5
+  :speed 1.0
   :damping 0.9
 })
 
 (def initial-params {
-  :blend_coef 20.0
+  :blend_coef 10.0
   :ray_hit_epsilon 0.01
   :palette_offset 0.0
   :gamma 0.55
@@ -119,6 +125,9 @@
   :params initial-params
   :shaders {}
   :current-shader nil
+  :t-now 0.0
+  :t-init 0.0
+  :t-delta 0.0
 })
 
 
@@ -129,6 +138,7 @@
         current-shader (first shaderlist)
         shaderobj (q/load-shader (current-shader :path))  ]
     ;(q/smooth)
+    (q/no-cursor)
     (q/texture-mode :normal)
     (q/texture-wrap :repeat)
     (q/noise-detail 2)
@@ -152,13 +162,11 @@
     ;(reset! tex1 (q/load-image "studio010.jpg"))
     
     ;(reset! texture-shader (load-shader "data/texfrag.glsl" "data/texvert.glsl"))
-    ;(reset! t-init (ns-time))
-    (ns-time-reset)
     (-> initial-state
          (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
          (assoc :shaders shaderlist)
          (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
-
+         (clock-reset)
          )
 
   ))
@@ -193,7 +201,7 @@
       (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
       (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
       (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
-      (.set shader "time" (float @t))
+      (.set shader "time" (float (state :t-now)))
       ;(.set shader "time" (float (/ (q/millis) 1000.0)))
 
       )
@@ -207,19 +215,85 @@
     pos))
 
 
-(defn camera-update-orig [state]
-  (let [[mx my] (vec2-mul (vec2-sub (state :mouse-position) [0.5 0.5])
-                          [(* PI 2.0) (* PI 0.99)])
-        pos (get-in state [:camera :pos] [0.0 0.0 0.0])
-        vpn (vec3-normalize [(* (Math/cos my) (Math/cos mx))
-                             (Math/sin my)
-                             (* (Math/cos my) (Math/sin mx))])
-        lookat (vec3-add pos (vec3-scale vpn 6.0))
-        new-cam (-> (state :camera)
-                    (assoc :vpn vpn)
-                    (assoc :lookat lookat)) ]
-  (-> state
-      (assoc :camera new-cam))))
+
+(defn update-cam-rotation [cam dt]
+  (let [az-vel (cam :az-vel)
+        alt-vel (cam :alt-vel)
+        az-dist (- az-vel (* az-vel (cam :damping)))
+        az-dist-delta (* az-dist dt)
+        az-new (+ az-vel az-dist-delta)
+        
+        alt-dist (- alt-vel (* alt-vel (cam :damping)))
+        alt-dist-delta (* alt-dist dt)
+        alt-new (+ alt-vel alt-dist-delta)
+        ]
+
+      (-> cam
+          (assoc :az az-new)
+          (assoc :alt alt-new))
+    )
+)
+
+
+; 
+; D = damping
+; dx = mouse delta
+; 
+; V' = (V + (dx * dt))
+; Vdammped = V' * (1 - (V' - (V' * D)) * dt)
+; 
+; 
+; 
+; 
+;(defn camera-update2 [state]
+;  (let [cam (state :camera)
+;        dt (state :t-delta)
+;        [mx my] (vec2-scale (vec2-sub (get-global-mouse)
+;                                      [(int (/ (q/screen-width) 2))
+;                                       (int (/ (q/screen-height) 2))])
+;                            0.005)
+;
+;        az-vel  (+ (cam :az-vel) (* mx dt))
+;        vx (* (- az-vel (* az-vel (cam :damping))) dt)
+;        az-vel (* az-vel (- 1.0 vx))
+;        
+;        alt-vel  (+ (cam :alt-vel) (* my dt))
+;        vx (* (- alt-vel (* alt-vel (cam :damping))) dt)
+;        alt-vel (* alt-vel (- 1.0 vx))
+;
+;        az (+ (cam :az) az-vel)
+;        alt (+ (cam :alt) alt-vel)
+;        ;az (+ (cam :az) mx)
+;        ;alt (+ (cam :alt) my)
+;        az (if (>= az TWOPI)
+;             (- az TWOPI)
+;             (if (< az 0.0)
+;              (+ az TWOPI)
+;              az))
+;        spi2 (* SMALLPI 0.5)
+;        alt (if (>= alt spi2)
+;             spi2
+;             (if (<= alt (- spi2))
+;              (- spi2)
+;              alt))
+;        vpn (vec3-normalize [(* (Math/cos alt) (Math/cos az))
+;                             (Math/sin alt)
+;                             (* (Math/cos alt) (Math/sin az))])
+;        lookat (vec3-add (cam :pos) (vec3-scale vpn 6.0))
+;        new-cam (-> (state :camera)
+;                    (assoc :az az)
+;                    (assoc :alt alt)
+;                    (assoc :az-vel az-vel)
+;                    (assoc :alt-vel alt-vel)
+;                    (assoc :vpn vpn)
+;                    (assoc :lookat lookat)
+;                    ) ]
+;
+;  (when (and (state :mousewarp) (q/focused))
+;    (center-cursor))
+;
+;  (-> state
+;      (assoc :camera new-cam))))
 
 
 (defn camera-update [state]
@@ -228,10 +302,12 @@
                                       [(int (/ (q/screen-width) 2))
                                        (int (/ (q/screen-height) 2))])
                             0.005)
-        az-vel  (+ (* (cam :az-vel)(cam :damping))
-                   (* mx @t-delta))
-        alt-vel (+ (* (cam :alt-vel)(cam :damping))
-                   (* my @t-delta))
+        dt (state :t-delta)
+        az-vel  (+ (* (cam :az-vel) (cam :damping))
+                   (* mx dt))
+        alt-vel (+ (* (cam :alt-vel) (cam :damping))
+                   (* my dt))
+
         az (+ (cam :az) az-vel)
         alt (+ (cam :alt) alt-vel)
         ;az (+ (cam :az) mx)
@@ -268,11 +344,12 @@
 
 
 (defn do-key-movement [state keychar]
-  (let [pos-old  (get-in state [:camera :pos] [0.0 0.0 0.0])
+  (let [cam (state :camera)
+        pos-old  (cam :pos)
         wup [0.0 -1.0 0.0] ; world up
-        vpn (get-in state [:camera :vpn])
-        vpv (vec3-normalize (vec3-cross (get-in state [:camera :vpn]) [0.0 -1.0 0.0]))
-        speed (* (get-in state [:camera :speed]) @t-delta)
+        vpn (cam :vpn)
+        vpv (vec3-normalize (vec3-cross (cam :vpn) [0.0 -1.0 0.0]))
+        speed (* (cam :speed) (state :t-delta))
         ;speed (get-in state [:camera :speed])
         ;vpu (vec3-normalize (vec3-cross vpn vpv)) ;viewplane up
         key-movement-map {
@@ -360,45 +437,34 @@
            (q/no-cursor)) 
          (-> state
              (update-in [:mousewarp] not)))
-    \` (do (ns-time-reset)
+    \` (do 
             (-> state
-               (assoc-in [:current-shader :shaderobj]
-                         (q/load-shader (get-in state [:current-shader :path])))))
-    \/ (do (ns-time-reset)
-           (center-cursor)
+                (clock-reset)
+                (assoc-in [:current-shader :shaderobj]
+                          (q/load-shader (get-in state [:current-shader :path])))))
+    \/ (do
             (-> state
-               (next-shader)))
+                (clock-reset)
+                (next-shader)))
     state))
 
 
-(defn mouse-moved [state event]
-  (let [pos (get-global-mouse)
-       new-state (-> state
-        (assoc :mouse-position [(int (/ (event :x) (q/width)))
-                              (int (/ (event :y) (q/height)))])
-        ;(assoc :mouse-delta (vec2-sub pos @global-pmouse))
-      ;(assoc :mouse-delta [(- (q/mouse-x) (q/pmouse-x))
-      ;                     (- (q/mouse-y) (q/pmouse-y))])
-        ;(camera-update)
-        )
-       
-       ]
-  ;(reset! global-pmouse pos)
-  new-state
-    ))
 
+(defn mouse-moved [state event]
+  (-> state
+      (assoc :mouse-position [(int (/ (event :x) (q/width)))
+                              (int (/ (event :y) (q/height)))])))
+       
 
 (defn mouse-dragged [state event]
     (-> state
         (assoc :mouse-position [(event :x) (event :y)])))
 
 
-(defn update [state]
-  (let [t-new (ns-time)]
-    (reset! t-delta (- t-new @t))
-    (reset! t t-new))
 
+(defn update [state]
   (-> state
+      (clock-tick)
       (do-movement-keys)
       (camera-update)
       (update-uniforms! (get-in state [:current-shader :shaderobj]))
@@ -426,8 +492,8 @@
         diff_spec (get-in state [:params :diff-spec] 0.5)
         lines [
                ;(str "state: " state)
-               (str (format "time %.5f" @t))
-               (str (format "dt %.5f" @t-delta))
+               (str (format "time %.2f" (state :t-now)))
+               (str (format "dt %.5f" (state :t-delta)))
                (str (format "dim: %dx%d" (q/width) (q/height)))
                (str "shader: " shadername)
                (str "pos: " (vec3-format pos))
@@ -517,5 +583,6 @@
      @((meta shaderpit) :state))
 
   )
+
 
 ;(-main)
