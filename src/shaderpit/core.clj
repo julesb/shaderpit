@@ -43,6 +43,10 @@
   (reset! t-delta 0.0)
 )
 
+(defn center-cursor []
+  (.mouseMove robot (int (/ (q/screen-width) 2))
+                    (int (/ (q/screen-height) 2))))
+
 (defn define-shader
   [& {:keys [id name path type]
       :or {id (default-shader :id)
@@ -254,12 +258,11 @@
                     (assoc :alt-vel alt-vel)
                     (assoc :vpn vpn)
                     (assoc :lookat lookat)
-                    (assoc :mousewarp-reset true)
                     ) ]
 
   (when (and (state :mousewarp) (q/focused))
-      (.mouseMove robot (int (/ (q/screen-width) 2))
-                        (int (/ (q/screen-height) 2))))
+    (center-cursor))
+
   (-> state
       (assoc :camera new-cam))))
 
@@ -339,6 +342,7 @@
            (do
              (q/no-loop)
              (q/cursor)))
+         (center-cursor)
          (-> state
           (update-in [:render-paused?] not)
           (assoc-in [:mousewarp] (state :render-paused?))))
@@ -361,6 +365,7 @@
                (assoc-in [:current-shader :shaderobj]
                          (q/load-shader (get-in state [:current-shader :path])))))
     \/ (do (ns-time-reset)
+           (center-cursor)
             (-> state
                (next-shader)))
     state))
