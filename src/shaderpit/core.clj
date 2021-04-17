@@ -8,7 +8,7 @@
            (java.lang System)
   ))
 
-
+(def gr (atom nil))
 (def ^:dynamic console-font)
 (def tex1 (atom nil))
 (def tex2 (atom nil))
@@ -121,6 +121,8 @@
   :mouse-position [0 0]
   ;:mouse-delta [0 0]
   :mousewarp true
+  :render-width 0
+  :render-height 0
   :aspect-ratio 1.0
   :render-paused? false
   :camera initial-camera
@@ -138,14 +140,17 @@
 (defn setup []
   (let [shaderlist (load-shader-dir)
         current-shader (first shaderlist)
-        shaderobj (q/load-shader (current-shader :path))  ]
+        shaderobj (q/load-shader (current-shader :path))
+        render-width (int (/ (q/width) 2))
+        render-height (int (/ (q/height) 2))]
     ;(q/smooth)
     (q/no-cursor)
     (q/texture-mode :normal)
-    (q/texture-wrap :repeat)
+    ;(q/texture-wrap :repeat)
     (q/noise-detail 2)
     (q/hint :disable-depth-test)
     (q/frame-rate 60)
+    (reset! gr (q/create-graphics render-width render-height :p2d))
     (def console-font (q/load-font "data/FreeMono-16.vlw"))
     ;(reset! tex1 (q/load-image "testpattern4po6.png"))
     ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
@@ -165,6 +170,8 @@
     
     ;(reset! texture-shader (load-shader "data/texfrag.glsl" "data/texvert.glsl"))
     (-> initial-state
+         (assoc :render-width render-width)
+         (assoc :render-height render-height)
          (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
          (assoc :shaders shaderlist)
          (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
@@ -188,8 +195,8 @@
         (.set shader "mousex" (float (mp 0)))
         (.set shader "mousey" (float (mp 1)))
       ;  )
-      (.set shader "swidth" (float (q/width)))
-      (.set shader "sheight" (float (q/height)))
+      (.set shader "swidth" (float (state :render-width)))
+      (.set shader "sheight" (float (state :render-height)))
       (.set shader "cam_pos" (float (cam-pos 0)) 
                              (float (cam-pos 1))
                              (float (cam-pos 2)))
@@ -419,7 +426,18 @@
 
 
 (defn update [state]
+  (when (or (not= (state :render-width) (int (/ (q/width) 2)))
+            (not= (state :render-height) (int (/ (q/height) 2))))
+    (.dispose @gr)
+    (reset! gr (q/create-graphics (int (/ (q/width) 2)) (int (/ (q/height) 2))  :p2d))
+    (println (format "resize %sx%s" (.width @gr) (.height @gr)))
+
+    )
+
   (-> state
+      (assoc :render-width (int (/ (q/width) 2)))
+      (assoc :render-height (int (/ (q/height) 2)))
+      (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
       (clock-tick)
       (do-movement-keys)
       (camera-update)
@@ -452,7 +470,7 @@
                ;(str "state: " state)
                (str (format "time %.2f" (state :t-now)))
                (str (format "dt %.5f" (state :t-delta)))
-               (str (format "dim: %dx%d" (q/width) (q/height)))
+               (str (format "dim: %dx%d" (state :render-width) (state :render-height)))
                (str "shader: " shadername)
                (str "pos: " (vec3-format pos))
                (str (format "az: %.2f" az))
@@ -472,7 +490,8 @@
                ;(str "camera: " (state :camera))
                (str (format "fps: %.2f" (float (q/current-frame-rate))))
                ]]
-    (q/fill 255 255 255 255)
+    ;(q/fill 255 255 255 255)
+    (q/no-stroke)
     (doseq [i (range (count lines))]
       (q/fill 0 0 0 128)
       (q/rect (- x 6) (- (+ y (* i line-space)) 12)
@@ -485,8 +504,7 @@
 
 (defn draw-quad [state ar]
   (q/begin-shape :quads)
-    (q/texture @tex1)
-    (q/shader (get-in state [:current-shader :shaderobj]))
+    ;(q/texture @tex1)
     (q/vertex -1 -1 0 0)
     (q/vertex  1 -1 ar 0)
     (q/vertex  1  1 ar 1)
@@ -495,19 +513,26 @@
 
 
 (defn draw [state]
-  (let [c [(* (q/width) 0.5)
-           (* (q/height) 0.5)]]
-    (q/with-translation c
-      (q/scale (c 0) (c 1))
-      ;(q/fill 0 0 0)
-      (q/no-stroke)
-      (draw-quad state (get state :aspect-ratio 1.0))
+  (let [rc [(* (state :render-width) 0.5)
+            (* (state :render-height) 0.5)]
+        sc [(* (q/width) 0.5)
+            (* (q/height) 0.5)]
+        shd (get-in state [:current-shader :shaderobj])
+        ]
 
-      )
-    )
-  (q/reset-shader) 
+    (q/with-graphics @gr
+      (q/with-translation rc
+        (q/scale (sc 0) (sc 1))
+
+        (when (q/loaded? shd)
+          (q/shader shd))
+        (draw-quad state (get state :aspect-ratio 1.0)))))
+
+  (q/reset-shader)
+  (q/image @gr 0 0 (q/width) (q/height))
   (draw-info state 32 (- (q/height) 400))
   )
+
 
 
 (defn -main [& args]
@@ -520,6 +545,7 @@
     ;:size :fullscreen
     :features [:resizable]
     ;:features [:present :resizable]
+    :settings #(q/smooth 8)
     ;:settings #(q/pixel-density 2)
     ;:settings #(q/pixel-density (q/display-density)) 
     :renderer :p2d
