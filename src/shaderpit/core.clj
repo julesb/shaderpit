@@ -20,7 +20,7 @@
 (def robot (new Robot))
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
-
+(def t-init (atom 0))
 ; =========================================================================
 
 (def default-shader {
@@ -32,12 +32,13 @@
   })
 
 (defn ns-time [state]
-  (- (double (/ (System/nanoTime) 1000000000.0)) (state :t-init)))
+  (- (double (/ (System/nanoTime) 1000000000.0)) @t-init))
 
 
 (defn clock-reset [state]
+  (reset! t-init (double (/ (System/nanoTime) 1000000000.0)))
   (-> state
-      (assoc :t-init 0.0)
+      (assoc :t-init @t-init)
       (assoc :t-now (ns-time state))
       (assoc :t-delta 0.0)))
 
@@ -152,6 +153,7 @@
     (q/frame-rate 60)
     (reset! gr (q/create-graphics render-width render-height :p2d))
     (def console-font (q/load-font "data/FreeMono-16.vlw"))
+    (def console-font (q/load-font "data/AmericanTypewriter-24.vlw"))
     ;(reset! tex1 (q/load-image "testpattern4po6.png"))
     ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
     ;(reset! tex1 (q/load-image "uv_checker_large.png"))
@@ -179,7 +181,6 @@
          )
 
   ))
-
 
 (defn update-uniforms! [state shader] 
   (when state
@@ -309,12 +310,6 @@
           \d (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpv nacc))))
           \e (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup nacc))))
           \c (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup acc))))
-;          \w (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale vpn speed))))
-;          \s (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale vpn speed))))
-;          \a (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale vpv speed))))
-;          \d (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale vpv speed))))
-;          \e (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale wup speed))))
-;          \c (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale wup speed))))
           \b (fn [s] (update-in s [:params :blend_coef] #(- % 0.1)))
           \n (fn [s] (update-in s [:params :blend_coef] #(+ % 0.1)))
           \1 (fn [s] (update-in s [:camera :speed] #(* % 0.9)))
@@ -412,7 +407,6 @@
     state))
 
 
-
 (defn mouse-moved [state event]
   (-> state
       (assoc :mouse-position [(int (/ (event :x) (q/width)))
@@ -424,15 +418,12 @@
         (assoc :mouse-position [(event :x) (event :y)])))
 
 
-
 (defn update [state]
   (when (or (not= (state :render-width) (int (/ (q/width) 2)))
             (not= (state :render-height) (int (/ (q/height) 2))))
     (.dispose @gr)
     (reset! gr (q/create-graphics (int (/ (q/width) 2)) (int (/ (q/height) 2))  :p2d))
-    (println (format "resize %sx%s" (.width @gr) (.height @gr)))
-
-    )
+    (println (format "resize %sx%s" (.width @gr) (.height @gr))))
 
   (-> state
       (assoc :render-width (int (/ (q/width) 2)))
@@ -532,7 +523,6 @@
   (q/image @gr 0 0 (q/width) (q/height))
   (draw-info state 32 (- (q/height) 400))
   )
-
 
 
 (defn -main [& args]
