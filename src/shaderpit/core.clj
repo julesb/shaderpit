@@ -14,7 +14,7 @@
 (def tex2 (atom nil))
 (def ^:const PI Math/PI)
 (def ^:const TWOPI (* PI 2.0))
-(def ^:const SMALLPI (* PI 0.99))
+(def ^:const SMALLPI (* PI 0.9))
 (def ^:const SMALLPI2 (* SMALLPI 0.5))
 
 (def robot (new Robot))
@@ -101,9 +101,10 @@
   :lookat [0.0 0.0 0.0]
   :vpn [0.0 0.0 -1.0]
   :fov (/ Math/PI 3.0)
-  :vel 0.0
+  :vel [0.0 0.0 0.0]
   :speed 1.0
-  :damping 0.0005
+  :damp-r 0.0005
+  :damp-m 0.5
 })
 
 (def initial-params {
@@ -216,86 +217,6 @@
     pos))
 
 
-
-(defn update-cam-rotation [cam dt]
-  (let [az-vel (cam :az-vel)
-        alt-vel (cam :alt-vel)
-        az-dist (- az-vel (* az-vel (cam :damping)))
-        az-dist-delta (* az-dist dt)
-        az-new (+ az-vel az-dist-delta)
-        
-        alt-dist (- alt-vel (* alt-vel (cam :damping)))
-        alt-dist-delta (* alt-dist dt)
-        alt-new (+ alt-vel alt-dist-delta)
-        ]
-
-      (-> cam
-          (assoc :az az-new)
-          (assoc :alt alt-new))
-    )
-)
-
-
-; 
-; D = damping
-; dx = mouse delta
-; 
-; V' = (V + (dx * dt))
-; Vdammped = V' * (1 - (V' - (V' * D)) * dt)
-; 
-; 
-; 
-; 
-;(defn camera-update2 [state]
-;  (let [cam (state :camera)
-;        dt (state :t-delta)
-;        [mx my] (vec2-scale (vec2-sub (get-global-mouse)
-;                                      [(int (/ (q/screen-width) 2))
-;                                       (int (/ (q/screen-height) 2))])
-;                            0.005)
-;
-;        az-vel  (+ (cam :az-vel) (* mx dt))
-;        vx (* (- az-vel (* az-vel (cam :damping))) dt)
-;        az-vel (* az-vel (- 1.0 vx))
-;        
-;        alt-vel  (+ (cam :alt-vel) (* my dt))
-;        vx (* (- alt-vel (* alt-vel (cam :damping))) dt)
-;        alt-vel (* alt-vel (- 1.0 vx))
-;
-;        az (+ (cam :az) az-vel)
-;        alt (+ (cam :alt) alt-vel)
-;        ;az (+ (cam :az) mx)
-;        ;alt (+ (cam :alt) my)
-;        az (if (>= az TWOPI)
-;             (- az TWOPI)
-;             (if (< az 0.0)
-;              (+ az TWOPI)
-;              az))
-;        spi2 (* SMALLPI 0.5)
-;        alt (if (>= alt spi2)
-;             spi2
-;             (if (<= alt (- spi2))
-;              (- spi2)
-;              alt))
-;        vpn (vec3-normalize [(* (Math/cos alt) (Math/cos az))
-;                             (Math/sin alt)
-;                             (* (Math/cos alt) (Math/sin az))])
-;        lookat (vec3-add (cam :pos) (vec3-scale vpn 6.0))
-;        new-cam (-> (state :camera)
-;                    (assoc :az az)
-;                    (assoc :alt alt)
-;                    (assoc :az-vel az-vel)
-;                    (assoc :alt-vel alt-vel)
-;                    (assoc :vpn vpn)
-;                    (assoc :lookat lookat)
-;                    ) ]
-;
-;  (when (and (state :mousewarp) (q/focused))
-;    (center-cursor))
-;
-;  (-> state
-;      (assoc :camera new-cam))))
-
 (defn wrap-n [n, nmin nmax]
   (let [r (- nmax nmin)]
     (if (>= n nmax)
@@ -314,17 +235,20 @@
         dt (state :t-delta)
         az-vel  (+ (cam :az-vel) (* mx dt))
         alt-vel (+ (cam :alt-vel) (* my dt))
-        damp (cam :damping)
+        dampr (cam :damp-r)
+        dampr-dt (Math/pow dampr dt)
+        dampm (cam :damp-m)
+        dampm-dt (Math/pow dampm dt)
 
-        az (+ (cam :az) (/ (* az-vel
-                       (- (Math/pow damp dt) 1.0))
-                    (Math/log damp)))
-        az-vel (* az-vel (Math/pow damp dt))
+        az (+ (cam :az)
+              (/ (* az-vel (- dampr-dt 1.0))
+                 (Math/log dampr)))
+        az-vel (* az-vel dampr-dt)
 
-        alt (+ (cam :alt) (/ (* alt-vel
-                         (- (Math/pow damp dt) 1.0))
-                      (Math/log damp)))
-        alt-vel (* alt-vel (Math/pow damp dt))
+        alt (+ (cam :alt)
+               (/ (* alt-vel (- dampr-dt 1.0))
+                  (Math/log dampr)))
+        alt-vel (* alt-vel dampr-dt)
 
         az (wrap-n az 0.0 TWOPI)
         alt (q/constrain alt (- SMALLPI2) SMALLPI2)
@@ -333,6 +257,14 @@
                              (Math/sin alt)
                              (* (Math/cos alt) (Math/sin az))])
         lookat (vec3-add (cam :pos) (vec3-scale vpn 2.0))
+
+        pos (vec3-add (cam :pos)
+                      (vec3-scale (vec3-scale (cam :vel) (- dampm-dt 1.0))
+                                  (/ 1.0 (Math/log dampm))))
+
+        vel (vec3-scale (cam :vel) dampm-dt)
+
+        ;pos (+ (cam :pos) vel)
         new-cam (-> (state :camera)
                     (assoc :az az)
                     (assoc :alt alt)
@@ -340,6 +272,8 @@
                     (assoc :alt-vel alt-vel)
                     (assoc :vpn vpn)
                     (assoc :lookat lookat)
+                    (assoc :pos pos)
+                    (assoc :vel vel)
                     ) ]
 
   (when (and (state :mousewarp) (q/focused))
@@ -356,23 +290,34 @@
         vpn (cam :vpn)
         vpv (vec3-normalize (vec3-cross (cam :vpn) [0.0 -1.0 0.0]))
         speed (* (cam :speed) (state :t-delta))
+        vel (cam :vel)
+        acc (* 1.0 (state :t-delta))
+        nacc (- acc)
         ;speed (get-in state [:camera :speed])
         ;vpu (vec3-normalize (vec3-cross vpn vpv)) ;viewplane up
         key-movement-map {
-          \w (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale vpn speed))))
-          \s (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale vpn speed))))
-          \a (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale vpv speed))))
-          \d (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale vpv speed))))
-          \e (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale wup speed))))
-          \c (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale wup speed))))
+          \w (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpn acc))))
+          \s (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpn nacc))))
+          \a (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpv acc))))
+          \d (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpv nacc))))
+          \e (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup nacc))))
+          \c (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup acc))))
+;          \w (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale vpn speed))))
+;          \s (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale vpn speed))))
+;          \a (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale vpv speed))))
+;          \d (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale vpv speed))))
+;          \e (fn [s] (assoc-in s [:camera :pos] (vec3-sub pos-old (vec3-scale wup speed))))
+;          \c (fn [s] (assoc-in s [:camera :pos] (vec3-add pos-old (vec3-scale wup speed))))
           \b (fn [s] (update-in s [:params :blend_coef] #(- % 0.1)))
           \n (fn [s] (update-in s [:params :blend_coef] #(+ % 0.1)))
           \1 (fn [s] (update-in s [:camera :speed] #(* % 0.9)))
           \2 (fn [s] (update-in s [:camera :speed] #(/ % 0.9)))
           \- (fn [s] (update-in s [:camera :fov] #(* % 0.99)))
           \= (fn [s] (update-in s [:camera :fov] #(/ % 0.99)))
-          \f (fn [s] (update-in s [:camera :damping] #(* % 0.99)))
-          \t (fn [s] (update-in s [:camera :damping] #(/ % 0.99)))
+          \f (fn [s] (update-in s [:camera :damp-r] #(* % 0.99)))
+          \t (fn [s] (update-in s [:camera :damp-r] #(/ % 0.99)))
+          \g (fn [s] (update-in s [:camera :damp-m] #(* % 0.99)))
+          \y (fn [s] (update-in s [:camera :damp-m] #(/ % 0.99)))
           \[ (fn [s] (update-in s [:params :ray_hit_epsilon] #(* % 0.9)))
           \] (fn [s] (update-in s [:params :ray_hit_epsilon] #(min 0.01 (/ % 0.9))))
           \3 (fn [s] (update-in s [:params :palette_offset] #(- % 0.005)))
@@ -491,7 +436,8 @@
         pos (get-in state [:camera :pos] [0.0 0.0 0.0])
         az (get-in state [:camera :az] 0.0)
         alt (get-in state [:camera :alt] 0.0)
-        damp (get-in state [:camera :damping] 0.0)
+        dampr (get-in state [:camera :damp-r] 0.0)
+        dampm (get-in state [:camera :damp-m] 0.0)
         speed (get-in state [:camera :speed] 0.0)
         fov (get-in state [:camera :fov] 0.0)
         fovdeg (/ (* fov 180.0) Math/PI)
@@ -511,7 +457,8 @@
                (str "pos: " (vec3-format pos))
                (str (format "az: %.2f" az))
                (str (format "alt: %.2f" alt))
-               (str (format "damp: %.4f" damp))
+               (str (format "dampm: %.4f" dampm))
+               (str (format "dampr: %.4f" dampr))
                (str (format "mouse: [%.2f %.2f]" (float mx) (float my)))
                (str (format "speed: %.6f" speed))
                (str (format "ar: %.2f" ar))
@@ -559,7 +506,7 @@
       )
     )
   (q/reset-shader) 
-  (draw-info state 32 (- (q/height) 370))
+  (draw-info state 32 (- (q/height) 400))
   )
 
 
