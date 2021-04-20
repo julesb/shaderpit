@@ -31,6 +31,50 @@
   :shaderobj nil
   })
 
+(def initial-camera {
+  :pos [128.0 50.0 0.0]
+  :az 0.0
+  :alt 0.0
+  :az-vel 0.0
+  :alt-vel 0.0
+  :lookat [0.0 0.0 0.0]
+  :vpn [0.0 0.0 -1.0]
+  :fov (/ Math/PI 3.0)
+  :vel [0.0 0.0 0.0]
+  :speed 1.0
+  :damp-r 0.0005
+  :damp-m 0.5
+})
+
+(def initial-params {
+  :blend_coef 10.0
+  :ray_hit_epsilon 0.01
+  :palette_offset 0.0
+  :gamma 0.55
+  :glow-intensity 0.0
+  :diff-spec 0.5
+})
+
+(def initial-state {
+  :keys-down #{}
+  :mouse-position [0 0]
+  ;:mouse-delta [0 0]
+  :mousewarp true
+  :render-width 0
+  :render-height 0
+  :aspect-ratio 1.0
+  :render-paused? false
+  :camera initial-camera
+  :params initial-params
+  :shaders {}
+  :current-shader nil
+  :t-now 0.0
+  :t-init 0.0
+  :t-delta 0.0
+})
+
+
+
 (defn ns-time [state]
   (- (double (/ (System/nanoTime) 1000000000.0)) @t-init))
 
@@ -54,6 +98,7 @@
 (defn center-cursor []
   (.mouseMove robot (int (/ (q/screen-width) 2))
                     (int (/ (q/screen-height) 2))))
+
 
 (defn define-shader
   [& {:keys [id name path type]
@@ -81,6 +126,7 @@
                (glsl-file-list)))
 )
 
+
 (defn next-shader [state]
   (let [id (get-in state [:current-shader :id])
         newid  (mod (inc id) (count (state :shaders)))
@@ -91,51 +137,6 @@
         (assoc-in [:current-shader :shaderobj] newshader-obj)
       )
   ))
-
-
-(def initial-camera {
-  :pos [128.0 50.0 0.0]
-  :az 0.0
-  :alt 0.0
-  :az-vel 0.0
-  :alt-vel 0.0
-  :lookat [0.0 0.0 0.0]
-  :vpn [0.0 0.0 -1.0]
-  :fov (/ Math/PI 3.0)
-  :vel [0.0 0.0 0.0]
-  :speed 1.0
-  :damp-r 0.0005
-  :damp-m 0.5
-})
-
-(def initial-params {
-  :blend_coef 10.0
-  :ray_hit_epsilon 0.01
-  :palette_offset 0.0
-  :gamma 0.55
-  :glow-intensity 0.0
-  :diff-spec 0.5 
-})
-
-(def initial-state {
-  :keys-down #{}
-  :mouse-position [0 0]
-  ;:mouse-delta [0 0]
-  :mousewarp true
-  :render-width 0
-  :render-height 0
-  :aspect-ratio 1.0
-  :render-paused? false
-  :camera initial-camera
-  :params initial-params
-  :shaders {}
-  :current-shader nil
-  :t-now 0.0
-  :t-init 0.0
-  :t-delta 0.0
-})
-
-
 
 
 (defn setup []
@@ -181,6 +182,7 @@
          )
 
   ))
+
 
 (defn update-uniforms! [state shader] 
   (when state
@@ -310,6 +312,7 @@
           \d (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpv nacc))))
           \e (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup nacc))))
           \c (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup acc))))
+          \x (fn [s] (assoc-in s [:camera :vel] (vec3-scale vel 0.9)))
           \b (fn [s] (update-in s [:params :blend_coef] #(- % 0.1)))
           \n (fn [s] (update-in s [:params :blend_coef] #(+ % 0.1)))
           \1 (fn [s] (update-in s [:camera :speed] #(* % 0.9)))
@@ -330,6 +333,9 @@
           \8 (fn [s] (update-in s [:params :glow-intensity] #(+ % 0.01)))
           \l (fn [s] (update-in s [:params :diff-spec] #(max 0.0 (- % 0.01))))
           \p (fn [s] (update-in s [:params :diff-spec] #(min 1.0 (+ % 0.01))))
+          ;KeyEvent/VK_ALT (fn [s] (do 
+          ;                (println "ALT")
+          ;                s))
          }]
     ;state))
   (if (contains? key-movement-map keychar)
@@ -438,7 +444,7 @@
 
 (defn draw-info [state x y]
   (q/text-font console-font)
-  (let [line-space 20
+  (let [line-space 30
         ar (get state :aspect-ratio 0.0)
         [mx my] (state :mouse-position)
         zoom (get state :zoom 0.0)
@@ -485,9 +491,9 @@
     (q/no-stroke)
     (doseq [i (range (count lines))]
       (q/fill 0 0 0 128)
-      (q/rect (- x 6) (- (+ y (* i line-space)) 12)
-              (+ (q/text-width (lines i)) 12) 16 9)
-      (q/fill 255 255 255 255)
+      (q/rect (- x 6) (- (+ y (* i line-space)) 20)
+              (+ (q/text-width (lines i)) 12) 26 12)
+      (q/fill 255 255 255 192)
       (q/text (lines i) x (+ y (* i line-space))))))
     ;(doseq [i (range (count lines))]
     ;  (q/text (lines i) x (+ y (* i line-space))))))
@@ -517,12 +523,13 @@
 
         (when (q/loaded? shd)
           (q/shader shd))
-        (draw-quad state (get state :aspect-ratio 1.0)))))
+        (draw-quad state (get state :aspect-ratio 1.0))))
 
-  (q/reset-shader)
-  (q/image @gr 0 0 (q/width) (q/height))
-  (draw-info state 32 (- (q/height) 400))
-  )
+    (q/reset-shader)
+    ;(q/image @gr 0 0 (sc 0) (sc 1))
+    (q/image @gr 0 0 (q/width) (q/height))
+    (draw-info state 32 (- (q/height) 600))
+  ))
 
 
 (defn -main [& args]
