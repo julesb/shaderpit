@@ -63,6 +63,7 @@
   :render-width 0
   :render-height 0
   :aspect-ratio 1.0
+  :pixel-scale (int 2)
   :render-paused? false
   :camera initial-camera
   :params initial-params
@@ -88,11 +89,10 @@
 
 
 (defn clock-tick [state]
-  (let [t-new (ns-time state)
-        dt (- t-new (state :t-now))]
+  (let [t-new (ns-time state)]
     (-> state
       (assoc :t-now t-new)
-      (assoc :t-delta dt))))
+      (assoc :t-delta (- t-new (state :t-now))))))
 
 
 (defn center-cursor []
@@ -331,6 +331,8 @@
           \6 (fn [s] (update-in s [:params :gamma] #(+ % 0.01)))
           \7 (fn [s] (update-in s [:params :glow-intensity] #(- % 0.01)))
           \8 (fn [s] (update-in s [:params :glow-intensity] #(+ % 0.01)))
+          \9 (fn [s] update-in s [:pixel-scale] #(int (max (- % 1) 1)))
+          \0 (fn [s] update-in s [:pixel-scale] #(int (+ % 1)))
           \l (fn [s] (update-in s [:params :diff-spec] #(max 0.0 (- % 0.01))))
           \p (fn [s] (update-in s [:params :diff-spec] #(min 1.0 (+ % 0.01))))
           ;KeyEvent/VK_ALT (fn [s] (do 
@@ -424,13 +426,16 @@
         (assoc :mouse-position [(event :x) (event :y)])))
 
 
-(defn update [state]
+(defn handle-resize [state]
   (when (or (not= (state :render-width) (int (/ (q/width) 2)))
             (not= (state :render-height) (int (/ (q/height) 2))))
     (.dispose @gr)
     (reset! gr (q/create-graphics (int (/ (q/width) 2)) (int (/ (q/height) 2))  :p2d))
-    (println (format "resize %sx%s" (.width @gr) (.height @gr))))
+    (println (format "resize %sx%s" (.width @gr) (.height @gr)))))
 
+
+(defn update [state]
+  (handle-resize state)
   (-> state
       (assoc :render-width (int (/ (q/width) 2)))
       (assoc :render-height (int (/ (q/height) 2)))
@@ -510,13 +515,10 @@
 
 
 (defn draw [state]
-  (let [rc [(* (state :render-width) 0.5)
-            (* (state :render-height) 0.5)]
-        sc [(* (q/width) 0.5)
-            (* (q/height) 0.5)]
+  (let [rc [(* (state :render-width) 0.5) (* (state :render-height) 0.5)]
+        sc [(* (q/width) 0.5) (* (q/height) 0.5)]
         shd (get-in state [:current-shader :shaderobj])
         ]
-
     (q/with-graphics @gr
       (q/with-translation rc
         (q/scale (sc 0) (sc 1))
