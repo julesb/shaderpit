@@ -1,4 +1,4 @@
-#extension GL_EXT_gpu_shader4 : enable
+//#extension GL_EXT_gpu_shader4 : enable
 
 #ifdef GL_ES
 precision mediump float;
@@ -36,7 +36,7 @@ uniform float diff_spec;
 float PI=3.14159265;
 
 const float NOISE_DETAIL =0.01;
-const float NOISE_DETAIL2 =0.3;
+const float NOISE_DETAIL2 =0.25;
 
 //const float MB_INNER_SPHERE = 0.72;
 //const float MBOX_SCALE = 8.0;
@@ -484,7 +484,7 @@ vec2 random_prim(vec3 p, float h, vec3 id) {
     }
 
     if (h < 0.2) {
-        return obj_sphere(p, 40.0);
+        return obj_sphere(p, 20.0);
     }
     else if (h < 0.4) {
         p = rotate_y(p, time*0.001*speed*1.3);
@@ -496,6 +496,8 @@ vec2 random_prim(vec3 p, float h, vec3 id) {
         return obj_round_box(p);
     }
     else if (h < 0.6) {
+        p = rotate_z(p, time*0.001*speed*1.231);
+        p = rotate_x(p, time*0.001*speed*1.297);
         return obj_tetrahedron(p, 8.0);
     }
     else if (h < 0.7) {
@@ -526,10 +528,26 @@ vec2 random_prim(vec3 p, float h, vec3 id) {
 vec2 cube_field(vec3 p, float h, vec3 id, float soff) {
     float cs = 20.0;
     float n = (1.0+floor(noise2d(id.xz*NOISE_DETAIL2) * 2.0)) * cs;
+//    return op_union(
+//            random_prim(p-vec3(0.0,n+cs+soff*2.0,0.0), h, id),
+//            obj_box(p - vec3(0.0, cs+soff, 0.0), vec3(cs,n,cs))
+//            );
     return op_sblend(p, obj_box(p - vec3(0.0, cs+soff, 0.0), vec3(cs,n,cs)),
                         random_prim(p-vec3(0.0,n+cs+soff*2.0,0.0), h, id));
 }
 
+
+vec2 cube_field2(vec3 p, float h, vec3 id, float soff) {
+    float cs = 20.0;
+    float n = (1.0+floor(noise2d(id.xz*NOISE_DETAIL2) * 2.0)) * cs;
+    return op_sub(
+            random_prim(p-vec3(0.0,n+cs+soff*2.0,0.0), h, id),
+            random_prim(p-vec3(0.0,n+cs+soff*2.0,0.0), fract(h+0.5), id)
+            //obj_box(p - vec3(0.0, cs+soff, 0.0), vec3(cs,n,cs))
+            );
+//    return op_sblend(p, obj_box(p - vec3(0.0, cs+soff, 0.0), vec3(cs,n,cs)),
+//                        random_prim(p-vec3(0.0,n+cs+soff*2.0,0.0), h, id));
+}
 
 vec2 distance_to_obj(in vec3 p) {
 //    return op_union(obj_floor(p) + vec2(sin(p.x) + sin(p.y) + sin(p.z), 0.0),
@@ -610,11 +628,11 @@ vec2 distance_to_obj(in vec3 p) {
     float sig = (int(id.x*id.y) % 2  == 0)? -1.0:1.0;
     float phase = noise2d(id.xz * NOISE_DETAIL2) * 2.0 * PI; // + (sig*PI*1.0);
     //float phase = hash(id.x*id.z) * 2.0 * PI;
-    float soff = ((sin(t+phase)* 0.5 + 0.5)) * 64.0 - 32.0;
+    float soff = ((sin(t+phase)* 0.5 + 0.5)) * 48.0 - 16.0;
     //float obidx =  hash(id.x*id.z); // * 0.5 + 0.5;
     float obidx =  noise2d(id.xz * NOISE_DETAIL2); // * 0.5 + 0.5;
-    vec2 scene1 = //op_union(
-                  op_sblend(p, 
+    vec2 scene1 = op_union(
+                  //op_sblend(p, 
                                obj_floor(p),
                                cube_field(prep, obidx, id, soff))
 
@@ -695,6 +713,7 @@ vec3 rainbow2_gradient(float t) {
     return pal(t, vec3(0.55,0.4,0.3),vec3(0.50,0.51,0.35)+0.1,vec3(0.8,0.75,0.8),vec3(0.075,0.33,0.67)+0.21);
 }
 
+
 vec3 prim_color(in vec3 p, float i) {
     i = mod(i, 10.0);
     prim_cols[0] = vec3(0.15,0.15,0.15);
@@ -715,63 +734,9 @@ vec3 prim_color(in vec3 p, float i) {
     }
     else {
         return vec3(0.01,0.01,0.01);
-        /*
-         return pal((0.5*snoise(p*NOISE_DETAIL)+framecount*0.005)*2.0*PI, vec3(0.5),
-                                                           vec3(0.5),
-                                                           vec3(0.5),
-                                                           //p);
-                                                           vec3(0.,1.0,0.0) + 1.0 );
-       */                                                    
-/*
-        int i1 = int(i);
-        int i2 = int(mod(floor(i)+1.0, 8.0));
-        vec3 c1 = prim_cols[i1];
-        vec3 c2 = prim_cols[i2];
-        float t = fract(i);
-        return mix(c1, c2, t);
-        */
     }
-
-/*
-    else if (i == 1.0)
-        return vec3(1.0,0.0,0.0);
-    else if (i == 2.0)
-        return vec3(0,0,1);
-    else if (i == 3.0)
-        return vec3(1,1,0);
-    else if (i == 4.0)
-        return vec3(0.0, 1.0, 0.0);
-    else if (i == 5.0)
-        return vec3(0.8, 0.8, 1.0);
-    else if (i == 6.0) {
-//        vec3 col = pal(noise(p * 2.0), vec3(0.5,0.5,0.5),
-//                                        vec3(0.5,0.5,0.5),
-//                                        vec3(1.0,1.0,1.0),
-//                                        vec3(0.0,0.33,0.67) );
-//        vec3 col = pal(noise(p * 1.0), vec3(0.75,0.75,0.75), // br
-//                                       vec3(0.75,0.75,0.75), // co
-//                                       vec3(1.0,1.0,1.0), // freq
-//                                       vec3(0.02,0.40,0.50) ); // phase
-        //vec3 col =pal(noise(p*4.0),vec3(0.5),vec3(0.55),vec3(0.45),vec3(0.00,0.10,0.20) + 0.47 );
-        float n = noise(p*4.0);
-        vec3 col =pal(n, vec3(0.5),vec3(0.55),vec3(0.45),vec3(0.0,0.1,0.2) + 0.47 );
-//        float n = noise(p * 10.0);
-        return col;
-    }
-    else {
-        float n = length(p); //noise(p*4.0);
-//        vec3 col =pal((0.5*snoise(p*NOISE_DETAIL)+0.5)*2.0*PI, vec3(0.5),
-//                                                           vec3(0.5),
-//                                                           vec3(0.75),
-//                                                           //p);
-//                                                           vec3(0.22,0.3,0.2) + 0.0 );
-
-        vec3 col =pal(i*1.0, vec3(0.5),vec3(0.5),vec3(0.45),vec3(0.60,0.80,0.99) + 0.47 );
-//        float n = noise(p * 10.0);
-        return col;
-     }
-     */
 }
+
 
 vec3 lambert(vec3 p, vec3 n, vec3 l) {
     return vec3(max( dot(normalize(l-p), n), 0.0));
@@ -887,6 +852,21 @@ vec3 getNormal( in vec3 p ) {
 }
 
 
+float D3DX_SRGB_to_FLOAT(float val)
+{
+    if( val < 0.04045 )
+        val /= 12.92;
+    else
+        val = pow((val + 0.055)/1.055,2.4);
+    return val;
+}
+
+vec3 D3DX_SRGB_to_FLOAT(vec3 v) {
+    return vec3(D3DX_SRGB_to_FLOAT(v.x),
+            D3DX_SRGB_to_FLOAT(v.y),
+            D3DX_SRGB_to_FLOAT(v.z));
+}
+
 
 void main(void) {
     vec2 q = vertTexCoord.st;
@@ -916,7 +896,7 @@ void main(void) {
 
     float lightspeed = 0.0; //0.0125;
     float lightrad = 1500.0;
-   
+
     vec3 lightpos = cam_pos+vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
                          3000.0,
                          sin(PI/4.0 + framecount*lightspeed)*lightrad);
@@ -929,7 +909,7 @@ void main(void) {
 
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=1000.0; //Max depth
+    const float maxd=768.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 
@@ -981,16 +961,26 @@ void main(void) {
     //c = prim_color(p, d.y);
     //c = prim_color(p, mod(id.x*id.z, 12.0));
     
-    c = prim_color(p, noise2d(id.xz*NOISE_DETAIL2) * 10.0);
+    //c = prim_color(p, noise2d(id.xz*NOISE_DETAIL2) * 10.0);
     //if (d.y  > 0.0)
-        c *= 1.0 - rainbow2_gradient( noise2d(id.xz*NOISE_DETAIL2));
+    c = 1.0 - rainbow2_gradient( noise2d(id.xz*NOISE_DETAIL2));
+    c += prim_color(p, d.y);
+    c *= 0.5;
+
     //c = rainbow2_gradient(AO*1.0);
+    //c = D3DX_SRGB_to_FLOAT(c);
 
     float cam_dist = length(cam_pos - p);
     vec3 spher = to_spherical(reflect(normalize(cam_pos-p), N ));
     vec2 uv = spher.xy / vec2(2.0*PI, PI);
     uv.y = 1.0 - uv.y;
     vec3 texcol = texture2D(texture, uv).rgb;
+   
+    if (d.y == 0.0) { // floor color
+        c = vec3(0.5,0.5,0.5);
+        texcol = vec3(0.25,0.25,0.25);
+    }
+
 /*
     if (d.y == 0.0) {
         texcol = vec3(0.5,0.5,0.5);
@@ -1004,7 +994,7 @@ void main(void) {
     vec3 stepbri = vec3(nsteps/float(MAX_RAY_STEPS));
     vec3 glow = stepbri * c * glow_intensity;
     //vec3 glow_miss = vec3(nsteps/256.0) * glowcol_miss * glow_intensity;
-    vec3 glow_miss = stepbri * c * glow_intensity;
+    vec3 glow_miss = glow; //stepbri * c * glow_intensity;
 
     
     if (f < maxd) {
@@ -1012,7 +1002,7 @@ void main(void) {
         vec3 ambient = vec3(0.1, 0.1, 0.1);
 
         float amb_shad =0.5;
-        float amb_lamb = 0.2;
+        float amb_lamb = 0.0; //0.333;
 
         vec3 lightdir = normalize(lightpos - p);
         float b = dot(N, lightdir);
@@ -1027,21 +1017,22 @@ void main(void) {
 
         vec3 fc = 
                 (
-                mix(texcol, c, 1.0) //0.6 + b*0.4)
+                mix(texcol, c, 0.15) //0.6 + b*0.4)
                 + mix(lamb, spec, diff_spec)
                 //+ ambient
                 //+ stepbri*c
                 ) * 0.5
                 * (shad) // vec3(shad)
                 * AO
-                //* (stepbri)
+                // * (stepbri)
                 //+ambient
                 ;
 
-        //vec3 fc = lamb;
+//        vec3 fc = vec3(shad);
 
         fc += glow;
-        fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        //fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        fc = D3DX_SRGB_to_FLOAT(fc);
         fc = pow(fc, vec3(gamma));
         gl_FragColor = vec4(fc, 1.0);
     }
@@ -1050,15 +1041,16 @@ void main(void) {
         vec2 uv2 = (spher2.xy / vec2(2.0*PI, PI));
         uv2.y = 1.0 - uv2.y;
         vec3 texcol2 = texture2D(texture, uv2.xy).rgb;
-        vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
-        //vec3 bgcol = vec3(0.0,0.0,0.0);
+        //vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
+        vec3 bgcol = vec3(0.0,0.0,0.0);
         //vec3 bgcol = vec3(0.5, 0.6,0.7); //rainbow2_gradient(1.0);
         //vec3 circ = get_integer_circles_color((-0.5+fract(uv2.xy))*16.0, vec3(1.0));
         //vec3 circ = get_grid_pixel_color((-0.5+fract(uv2.xy))*4.0);
         //bgcol += circ;
         //bgcol = sun(bgcol, normalize(p-cam_pos), normalize(p-lightpos));
         bgcol += glow_miss;
-        //bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+       // bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        bgcol = D3DX_SRGB_to_FLOAT(bgcol);
         bgcol = pow(bgcol, vec3(gamma));
         
         //bgcol = vec3(noise2d(scp.xy*100.0));

@@ -5,16 +5,7 @@ precision mediump float;
 precision mediump int;
 #endif
 
-#define MANDELBULB 0
-#define MANDELBOX 1
-#define FRACTALTYPE MANDELBOX
-//#define FRACTALTYPE -1
 #define MAX_RAY_STEPS 256
-#define SPREAD vec3(128.0, 0.0, 128.0)
-/*
-   Based on tutorial at:
-   http://www.geeks3d.com/20130524/building-worlds-with-distance-functions-in-glsl-raymarching-glslhacker-tutorial-opengl/
-*/
 vec3 prim_cols[9];
 
 uniform sampler2D texture;
@@ -35,11 +26,9 @@ uniform float ray_hit_epsilon;
 uniform float palette_offset;
 uniform float gamma;
 uniform float glow_intensity;
+uniform float diff_spec;
 
 float PI=3.14159265;
-
-
-const float MBOX_SCALE = 8.0;
 
 
 vec3 to_spherical(vec3 v) {
@@ -49,12 +38,6 @@ vec3 to_spherical(vec3 v) {
     float lat = acos(v.z / r);
     return vec3(lon,lat,r);
 }
-
-float hash( float n )
-{
-    return fract(sin(n)*43758.5453);
-}
-
 
 
 float sd_plane(in vec3 p, in vec3 n, in float o) {
@@ -68,33 +51,6 @@ vec2 obj_floor(in vec3 p) {
 vec2 obj_sphere(in vec3 p, float r) {
     float d = length(p) -r;
     return vec2(d,3.0);
-}
-
-vec2 obj_torus(in vec3 p) {
-    vec2 r = vec2(32.0,8.0);
-    vec2 q = vec2(length(p.xz)-r.x,p.y);
-    float d = length(q)-r.y;
-    return vec2(d,2.0);
-}
-
-vec2 obj_round_box(in vec3 p) {
-    float d = length(max(abs(p)-vec3(16.0,16.0,16.0),0.0))-4.0;
-    return vec2(d,5.0);
-}
-
-vec2 obj_box( vec3 p, vec3 b ){
-  vec3 d = abs(p) - b;
-  return vec2(min(max(d.x,max(d.y,d.z)),0.0)+length(max(d,0.0)), 5.0);
-}
-
-vec2 obj_cylinder( vec3 p, vec3 c ) {
-  return vec2(length(p.xz-c.xy)-c.z, 8.0);
-}
-
-vec2 obj_capsule(vec3 p, vec3 a, vec3 b, float r ) {
-    vec3 pa = p - a, ba = b - a;
-    float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
-    return vec2(length( pa - ba*h ) - r, 8.0);
 }
 
 
@@ -158,33 +114,6 @@ vec3 op_rep(vec3 p, vec3 spread) {
     return mod(p+spread*0.5, spread) - spread*0.5;
 }
 
-vec2 obj_sine(vec3 p) {
-    p = floor(p);
-    return vec2((sin(p.x * 0.2059)
-               + sin(p.y * 0.231)
-               + sin(p.z * 0.226)) * 0.333, 4.0);
-}
-
-vec2 op_displace(vec3 p, vec2 obj) {
-    float m = framecount * 0.1;
-    vec3 v = cos(p*0.1+m);
-    float d = v.x*v.y*v.z * 2.0;
-    return vec2(obj.x+d, obj.y);
-}
-
-vec3 deform( in vec3 p, in float time, out float sca )
-{
-    float s = 0.034*sqrt(dot(p*p,p*p));
-    //float s = 1.0;
-
-    p = p/s;
-
-    //p.xyz += 16.0*sin(0.5*vec3(1.0,1.1,1.3)*time+vec3(0.0,2.0,4.0));
-    
-    sca = s;
-    
-	return p;
-}
 
 vec3 rotate_x(in vec3 p, float an) {
     float c = cos(an);
@@ -196,16 +125,6 @@ vec3 rotate_y(in vec3 p, float an) {
     float s = sin(an);
     return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
 }
-/*
-vec3 rotate_y(vec3 p, float a) {
-	float c,s;vec3 q=p;
-	c = cos(a); s = sin(a);
-	p.x = c * q.x + s * q.z;
-	p.z = -s * q.x + c * q.z;
-    return p;
-}
-*/
-
 vec3 rotate_z(in vec3 p, float an) {
     float c = cos(an);
     float s = sin(an);
@@ -216,152 +135,9 @@ vec3 get_rep_id(vec3 p, vec3 spread) {
     return floor((p+spread*0.5) / spread);
 }
 
-vec2 obj_ufo(vec3 p) {
-    return op_sblend(p,
-        op_union(
-            op_displace(p, obj_sphere(p, 1.25)),
-            op_sub(op_displace(p, obj_round_box(p)),
-                     op_displace(p, obj_torus(p)))),
-        op_sblend(p,
-            op_displace(p, obj_capsule(p, vec3(30.5, 0.0, 0.0), vec3(-30.5, 0.0, 0.0), 5.95 )),
-            op_displace(p, obj_capsule(p, vec3(0.0, 0.0, -30.5), vec3(0.0, 0.0, 30.5), 5.95 )) )
-        //obj_capsule(p, vec3(0.0, 1.5, 0.0), vec3(0.0, -1.5, 0.0), 0.5 )
-        //op_displace(p, obj_capsule(p, vec3(0.0, 1.5, 0.0), vec3(0.0, -1.5, 0.0), 0.5 ))
-        
-        );
-}
-
-vec2 obj_invertedufo(vec3 p) {
-    float s = 1.0;
-    vec3 p2 = (deform(p,float(framecount)*0.0333, s));
-    vec2 g = obj_ufo(p2) * vec2(s, 1.0);
-    return g;
-}
 
 
 
-/*
-vec2 obj_ufo(vec3 p) {
-    return op_union(
-        op_union(
-            op_union(op_displace(p, obj_round_box(p)),
-                     op_displace(p, obj_torus(p))),
-            op_displace(p, obj_sphere(p, 1.5)) ),
-        op_union(
-            op_displace(p, obj_capsule(p, vec3(2.5, 0.0, 0.0), vec3(-2.5, 0.0, 0.0), 0.75 )),
-            op_displace(p, obj_capsule(p, vec3(0.0, 0.0, -2.5), vec3(0.0, 0.0, 2.5), 0.75 )) )
-        //obj_capsule(p, vec3(0.0, 1.5, 0.0), vec3(0.0, -1.5, 0.0), 0.5 )
-        //op_displace(p, obj_capsule(p, vec3(0.0, 1.5, 0.0), vec3(0.0, -1.5, 0.0), 0.5 ))
-        
-        );
-}
-*/
-
-
-
-
-void sphereFold(inout vec3 z, inout float dz)
-{
-	float r2 = dot(z,z);
-	if (r2 < 0.5)
-    { 
-		float temp = 2.0;
-		z *= temp;
-		dz*= temp;
-	}
-    else if (r2 < 1.0)
-    { 
-		float temp = 1.0 / r2;
-		z *= temp;
-		dz*= temp;
-	}
-}
-
-void boxFold(inout vec3 z, inout float dz)
-{
-	z = clamp(z, -1.0, 1.0) * 2.0 - z;
-}
-
-float sd_mandelbox(vec3 z, out float AO) {
-    //AO = 1.0;
-    int iters = 20;
-    float scale = -2.0; //2.0;
-	vec3 offset = z;
-	float dr = 1.0;
-    //float aostep = 1.0 / 
-	for (int n = 0; n < iters; n++) {
-        //AO *= 0.725;
-		boxFold(z,dr);
-		sphereFold(z,dr);
-        z = scale * z + offset;
-        dr = dr * abs(scale) + 1.0;
-	}
-	float r = length(z);
-    AO = log(r)/32.0;
-    //AO = 1.0 - (r / abs(dr))/ float(iters);
-
-    //AO = min((AO + 0.075) * 4.1, 1.0);
-	return  r / abs(dr);
-}
-
-float sd_mandelhack(vec3 z, out float AO) {
-    //AO = 1.0;
-    int iters = 16;
-    float scale = 2.75;
-	vec3 offset = z*z;
-	float dr = 1.0;
-    //float aostep = 1.0 / 
-	for (int n = 0; n < iters; n++) {
-        //AO *= 0.725;
-		boxFold(z,dr);
-		//boxFold(z,dr);
-		sphereFold(z,dr);
-        dr = dr * abs(scale) + 1.0;
-        z = scale * z + offset;
-	}
-	float r = length(z);
-    AO = log(r)/32.0;
-    //AO = 1.0 - (r / abs(dr))/ float(iters);
-
-    //AO = min((AO + 0.075) * 4.1, 1.0);
-	return  r / abs(dr);
-}
-
-float sd_mandelhack(vec3 p) {
-    float ignore;
-    return sd_mandelhack(p, ignore);
-}
-
-
-float sd_mandelbox(vec3 p) {
-	float ignore;
-	return sd_mandelbox(p, ignore);
-}
-
-vec2 obj_invertedmandel(vec3 p) {
-    float s = 1.0;
-    vec3 p2 = (deform(p,float(framecount)*0.01333, s));
-    vec2 g = vec2(sd_mandelbox(p2), 8.0) * vec2(s, 1.0);
-    return g;
-}
-
-
-void rY(inout vec3 p, float a) {
-	float c,s;vec3 q=p;
-	c = cos(a); s = sin(a);
-	p.x = c * q.x + s * q.z;
-	p.z = -s * q.x + c * q.z;
-}
-
-
-vec2 distance_to_obj(in vec3 p) {
-
-    //return obj_invertedmandel(p);
-
-    return vec2( sd_mandelbox(p/MBOX_SCALE)*MBOX_SCALE, 8.0);
-    
-    //return vec2(sd_mandelbox(p), 8.0);
-}
 
 
 vec3 pal( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d ) {
@@ -399,6 +175,7 @@ vec3 fire_gradient(float t) {
 	return max(pow(vec3(min(t * 1.02, 1.0)), vec3(1.7, 25.0, 100.0)), 
 			   vec3(0.06 * pow(max(1.0 - abs(t - 0.35), 0.0), 5.0)));
 }
+
 
 vec3 floor_color(in vec3 p) {
     float m = 0.5;
@@ -443,11 +220,113 @@ vec3 prim_color(in vec3 p, float i) {
     else {
         return vec3(0.1,0.1,0.1);
     }
+
 }
+
+
+
+// -------------------------------------------------------------------------
+// https://www.shadertoy.com/view/4sjSW1
+
+#define RSCALE 2.8
+#define MINRAD2 .25
+#define ITERATION 8
+
+float minRad2 = clamp(MINRAD2, 1.0e-9, 1.0);
+vec4 scale = vec4(RSCALE, RSCALE, RSCALE, abs(RSCALE)) / minRad2;
+float absScalem1 = abs(RSCALE - 1.0);
+float AbsScaleRaisedTo1mIters = pow(abs(RSCALE), float(1-10));
+vec3 surfaceColour1 = vec3(.8, .0, 0.);
+vec3 surfaceColour2 = vec3(.4, .4, 0.5);
+//vec3 surfaceColour3 = vec3(.5, 0.3, 0.00);
+vec3 surfaceColour3 = vec3(0.1, 0.1, 0.1);
+vec4 orb;
+float K = 0.2;
+
+//bool doAO = false;
+bool doInversion = true;
+bool doPlane = true;
+//bool doSoftShadow = false;
+//bool doMorph = true;
+bool doBreathe = false;
+//bool doRotate = true;
+bool doTranslate = true;
+
+float apollonian(vec3 p)
+{
+   	float scale = 1.0;
+	orb = vec4(1000.0); 
+	for( int i=0; i < ITERATION;i++ )
+	{
+		p = -1.0 + 2.0*fract(0.5*p+0.5);
+        float r2 = dot(p,p);
+        orb = min( orb, vec4(abs(p),r2) );
+        //float k = 1.2/ r2;
+        float k = (1.0 + K)/r2;
+		p *= k;
+		scale *= k;
+	}
+	
+    float res = abs(p.y + float(doBreathe) *0.5*sin(time));
+
+    if (!doPlane) res = min(abs(p.z)+abs(p.x), 
+                        	min(abs(p.x)+abs(p.y),
+                            	abs(p.y)+abs(p.z)));
+    return 0.25/scale*res;
+}
+
+float box(vec3 p, vec3 b)
+{
+  	vec3 d = abs(p) - b;
+  	return min(max(d.x,max(d.y,d.z)),0.0) + length(max(d,0.0));
+}
+
+#define DSCALE 8.0
+vec2 distance_to_obj(vec3 p)
+{
+  //float scale = 8.0;
+    vec3 q=p;
+    p /= DSCALE;
+    float s = 1.0;
+    if (doInversion) {
+      s = dot(p,p);
+      p /= s;
+      p += vec3(1.0);
+    }
+    if (doTranslate) p.y += 0.1*time;
+    float d0=apollonian(p)*DSCALE;
+    //float d1=abs(p.y-0.02);
+    //float d3 = box(q+vec3(0.,-2.,0.), 2.9*vec3(3.,2.,2.3));
+    //float d = max(d0, d3);
+    float d = d0; //max(d0, d3); // Don't box
+    //d=min(d,d1);
+    return vec2(d*s, 0.0);
+}
+//vec2 distance_to_obj(in vec3 p) {
+//    return vec2(apollonian(p/DSCALE)*DSCALE);
+//}
+// -------------------------------------------------------------------------
+
 
 vec3 lambert(vec3 p, vec3 n, vec3 l) {
     return vec3(max( dot(normalize(l-p), n), 0.0));
    // return clamp(vec3(dot(normalize(l-p), n)), 0.0, 1.0);
+}
+
+vec3 specular(in vec3 N, in vec3 L, in vec3 V) {
+   float shininess = 32.0;
+   float specularterm = 0.0;
+
+   // calculate specular reflection only if
+   // the surface is oriented to the light source
+   if(dot(N, L) > 0.0)
+   {
+      // half vector
+      vec3 H = normalize(L + V);
+      specularterm = pow(dot(N, H), shininess);  //
+   }
+    return vec3(1.0,0.9,0.8) * vec3(1.0,1.0,1.0) * specularterm;
+   //return u_matSpecularReflectance * u_lightSpecularIntensity * specularTerm;
 }
 
 
@@ -502,6 +381,7 @@ vec3 saturate(vec3 a) { return clamp(a, 0.0, 1.0); }
 vec2 saturate(vec2 a) { return clamp(a, 0.0, 1.0); }
 float saturate(float a) { return clamp(a, 0.0, 1.0); }
 
+/*
 float getao(vec3 p, vec3 n) {
     float ao = 1.0;
     float amb = 0.2;
@@ -513,12 +393,14 @@ float getao(vec3 p, vec3 n) {
     ao *= saturate(distance_to_obj(p + n * 0.4).x*2.5);
     return amb + (1.0-amb)*clamp(ao*8.0, 0.0, 1.0);
 }
+*/
 
 float calcAO( in vec3 pos, in vec3 nor ) {
 	float occ = 0.0;
     float sca = 1.0;
     for( int i=0; i<10; i++ ) {
-        float hr = 0.01 + float(i)/0.0525;
+        float hr = 0.01 + float(i)/0.0475;
+        //float hr = 0.01 + float(i)/0.0525;
         //float hr = 0.01 + 0.12*float(i)/4.0;
         vec3 aopos =  nor * hr + pos;
         float dd = distance_to_obj( aopos ).x;
@@ -540,6 +422,26 @@ vec3 calcNormal( in vec3 pos ) {
 
 vec3 getNormal( in vec3 p ) {
     return normalize(cross( dFdy(p), dFdx(p) ));
+}
+
+float hash( float n )
+{
+    return fract(sin(n)*43758.5453);
+}
+
+float D3DX_SRGB_to_FLOAT(float val)
+{
+    if( val < 0.04045 )
+        val /= 12.92;
+    else
+        val = pow((val + 0.055)/1.055,2.4);
+    return val;
+}
+
+vec3 D3DX_SRGB_to_FLOAT(vec3 v) {
+    return vec3(D3DX_SRGB_to_FLOAT(v.x),
+            D3DX_SRGB_to_FLOAT(v.y),
+            D3DX_SRGB_to_FLOAT(v.z));
 }
 
 
@@ -574,18 +476,21 @@ void main(void) {
 //    vec3 lightpos = cam_pos+vec3(cos(PI/4.0 + framecount*lightspeed)*lightrad,
 //                         3000.0,
 //                         sin(PI/4.0 + framecount*lightspeed)*lightrad);
+
+    vec3 lightpos = cam_pos + u*0.5 + v*-0.125; // + normalize(vpn)*2.0; // + u*2.0 + v*2.0;
+
     //vec3 lightpos = normalize(cam_pos*vec3(-1.0, 1.0, 1.0)) * 500.0;
     //vec3 lightpos =  vec3(400.0,400.0,400.0);
     
-    vec3 lightpos = cam_pos; // + normalize(vpn)*0.1 + u*0.1;
+    //vec3 lightpos = cam_pos + normalize(vpn)*1.0 + u*0.01;
 
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=5000.0; //Max depth
+    const float maxd=1000.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 
-    float f=0.01; // near plane?
+    float f=0.0001; // near plane?
     
     float nsteps = 0.0;
 
@@ -598,6 +503,7 @@ void main(void) {
         if ((d.x < ray_hit_epsilon) || (f > maxd)) {
             //p += (vec3(hash(p.x), hash(p.y), hash(p.z)) -= 0.5) * 0.001;
             //d = distance_to_obj(p);
+            //d = vec2(1000.0, 1.0);
             break;
         }
         f+=d.x;
@@ -608,7 +514,6 @@ void main(void) {
 
 
     float AO;
-        float m = sd_mandelbox(p/MBOX_SCALE, AO); // * MBOX_SCALE;
 
     vec3 n = vec3(d.x-distance_to_obj(p-e.xyy).x,
                   d.x-distance_to_obj(p-e.yxy).x,
@@ -623,79 +528,93 @@ void main(void) {
     //AO = AO*AO*AO;
 
 
-    vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
-    vec3 glowcol = rainbow2_gradient(AO*1.0); //vec3(1.0, 1.0, 1.0);
-    c =  rainbow2_gradient(AO*1.0);
+    //vec3 glowcol_miss = rainbow2_gradient(AO*1.0);
+    //vec3 glowcol = rainbow2_gradient(AO*1.0); //vec3(1.0, 1.0, 1.0);
+    //c =  rainbow2_gradient(AO*1.0);
 
 
     float cam_dist = length(cam_pos - p);
-
-    vec3 spher = to_spherical(reflect(normalize(p-cam_pos), N ));
-    vec2 uv = spher.xy / vec2(2.0*PI, PI);
-    uv.y = 1.0 - uv.y;
-    vec3 texcol = texture2D(texture, uv).rgb;
-    //vec3 circ = get_integer_circles_color(uv, vec3(1.0));
-    //texcol += circ; 
+    //vec3 spher = to_spherical(reflect(normalize(cam_pos-p), N ));
+    //vec2 uv = spher.xy / vec2(2.0*PI, PI);
+    //uv.y = 1.0 - uv.y;
+    //vec3 texcol = texture2D(texture, uv).rgb;
     //texcol = sun(texcol, normalize(cam_pos-p), normalize(p-lightpos));
     //texcol = iqfog(texcol, cam_dist, normalize(p-cam_pos), normalize(p-lightpos));
+    
+    
+    
     vec3 stepbri = vec3(nsteps/float(MAX_RAY_STEPS));
-    vec3 glow = stepbri * c * glow_intensity;
-    //vec3 glow_miss = vec3(nsteps/256.0) * glowcol_miss * glow_intensity;
-    vec3 glow_miss = stepbri * c * glow_intensity;
+    
+    c = vec3(0.0, 0.0, 0.5);
+    //c = remnantx_color(p/DSCALE, 10.0);
+    //c = rainbow2_gradient(p/DSCALE); 
+    // c = p / DSCALE;
+    //c = stepbri;
+    //vec3 glow = vec3(stepbri) * c;
+    vec3 glow =  c * stepbri * glow_intensity;
+    //vec3 glow_miss = glow;
+    vec3 glow_miss = c * stepbri * glow_intensity;
 
     
     if (f < maxd) {
- 
         vec3 ambient = vec3(0.15, 0.09, 0.08);
-        float amb_shad =0.1;
-        float amb_lamb = 0.1;
+        float amb_shad =0.2;
+        float amb_lamb = 0.0;
+
+        vec3 lightdir = normalize(lightpos - p);
+        vec3 spec = specular(N, lightdir, normalize(cam_pos-p));
 
         //vec3 cam_dist_sc = vec3(cam_dist/ 256.0);
-        float b=dot(N,normalize(lightpos-p));
+        float b=dot(N,lightdir);
+/*        
+        vec3 phong;
+        if (b < 0.0) {
+            phong = vec3(0.0);
+        }
+        else {
+            phong =  vec3((b + pow(b,64.0))); // * (1.0-f*0.005));
+        }
+*/        
         vec3 phong =  vec3((b + pow(b,8.0))); // * (1.0-f*0.005));
         vec3 lamb = amb_lamb + (1.0 - amb_lamb) * lambert(p, N, lightpos);
         //vec3 lamb = lambert(p, N, lightpos);
-        float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, normalize(lightpos-p), 0.01, 200.0, 16.0);
+        float ldist = distance(p, lightpos);
+        //float shad = amb_shad + (1.0 - amb_shad) * iqsoftshadow(p, normalize(lightpos-p), 0.01, ldist, 16.0);
         //float shad = iqsoftshadow(p, normalize(lightpos-p), 0.1, 300.0, 32.0);
         //float shad = iqshadow(p, normalize(lightpos-p), 0.01, 300.0);
-        //*
-        //vec3 fc = (lamb*1.0 + phong + glow) * AO * c * shad;
-        //**
 
-        vec3 fc = 
-                (
-                mix(texcol, c, 0.95)
-
-                + lamb * 0.25
-                + phong * 0.25
-                )
-                * shad
-                * AO
+        vec3 fc = (
+                //texcol
+                //mix(texcol, c, 1.0)
+                 c * 0.3333
+                 //* mix(lamb, spec, diff_spec)
+                //+ ambient
+                + lamb * 0.3333
+                + phong * 0.3333
+                ) * 1.0 
+                //* shad
+                + vec3(AO)
                 ;
         
+        //vec3 fc = vec3(AO);
+        //vec3 fc = vec3(phong+lamb+c*(1.0-stepbri))*0.25 * AO * shad;
         fc += glow;
-        fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        //fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         fc = pow(fc, vec3(gamma));
         gl_FragColor = vec4(fc, 1.0);
     }
     else {
-        /*
-        vec3 spher2 = to_spherical(normalize(cam_pos-p));
-        vec2 uv2 = (spher2.xy / vec2(2.0*PI, PI));
-        uv2.y = 1.0 - uv2.y;
-        vec3 texcol2 = texture2D(texture, uv2.xy).rgb;
-        vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
-        */
+        //vec3 spher2 = to_spherical(normalize(cam_pos-p));
+        //vec2 uv2 = (spher2.xy / vec2(2.0*PI, PI));
+        //uv2.y = 1.0 - uv2.y;
+        //vec3 texcol2 = texture2D(texture, uv2.xy).rgb;
+        //vec3 bgcol = texcol2; //rainbow2_gradient(1.0);
         vec3 bgcol = vec3(0.0,0.0,0.0);
-        //vec3 bgcol = vec3(0.5, 0.6,0.7); //rainbow2_gradient(1.0);
-        //bgcol += circ;
         //bgcol = sun(bgcol, normalize(p-cam_pos), normalize(p-lightpos));
+        //bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         bgcol += glow_miss;
-        bgcol = iqfog(bgcol, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+       // bgcol = D3DX_SRGB_to_FLOAT(bgcol);
         bgcol = pow(bgcol, vec3(gamma));
-        
-        //bgcol = vec3(noise2d(scp.xy*100.0));
-        // vec3 glow = vec3(nsteps/256.0) *  vec3(0.8,0.8,1.0) * 1.0;
         gl_FragColor=vec4(bgcol.rgb,1.0); //background color
     }
 

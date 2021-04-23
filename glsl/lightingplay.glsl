@@ -1,4 +1,4 @@
-#extension GL_EXT_gpu_shader4 : enable
+//#extension GL_EXT_gpu_shader4 : enable
 
 #ifdef GL_ES
 precision mediump float;
@@ -774,7 +774,7 @@ void main(void) {
 
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=2000.0; //Max depth
+    const float maxd=5000.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 

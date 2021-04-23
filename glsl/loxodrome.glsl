@@ -1,4 +1,4 @@
-#extension GL_EXT_gpu_shader4 : enable
+//#extension GL_EXT_gpu_shader4 : enable
 
 #ifdef GL_ES
 precision mediump float;
@@ -503,7 +503,7 @@ float ceilCustom(float x, float c) {
 float sdLoxodrome(vec3 p, float twist, float rotSymm, float thickness) {
 	const float pi = 3.14159265359;
 	vec3 s = rectToSpher(p);
-	s.y += time*0.0005;
+	s.y += time*1.0;
 	float offset = thickness * cos(s.z);
 	vec2 s1 = vec2(1.0 - offset, invSecIntegral((ceilCustom(secIntegral(s.z) * twist - s.y, pi * 2.0 / rotSymm) + s.y) / twist));
 	vec2 s2 = vec2(1.0 - offset, invSecIntegral((floorCustom(secIntegral(s.z) * twist - s.y, pi * 2.0 / rotSymm) + s.y) / twist));

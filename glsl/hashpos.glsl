@@ -1,4 +1,4 @@
-#extension GL_EXT_gpu_shader4 : enable
+//#extension GL_EXT_gpu_shader4 : enable
 
 #ifdef GL_ES
 precision mediump float;
@@ -583,7 +583,7 @@ vec2 noise_placement(vec3 p, float n) {
     vec3 pos;
     float d = 9999.0; 
     float i=0.0;
-    float sec = time*0.000125;
+    float sec = time*1.0;
     vec3 c;
     for (i=0.0; i < n; i++) {
         pos = vec3(noise(i+sec), 0.5, noise(i+sec+1.3323));
@@ -632,7 +632,7 @@ vec2 distance_to_obj(in vec3 p) {
                   //op_sblend(p, 
                                obj_floor(p),
                                //obj_sphere(p, 4.0));
-                               noise_placement(p, 5.0));
+                               noise_placement(p, 4.0));
                   //             cube_field(prep, obidx, id, soff))
 
                 //* vec2(0.5, 1.0);
@@ -846,7 +846,7 @@ void main(void) {
 */    
     //vec3 lightpos = vec3(cam_pos.x,500.0,cam_pos.z);
     //vec3 lightpos = normalize(cam_pos*vec3(-1.0, 1.0, 1.0)) * 500.0;
-    vec3 lightpos =  vec3(0.0,100.0,0.0);
+    vec3 lightpos =  vec3(0.0,200.0,0.0);
     
     //vec3 lightpos = cam_pos + normalize(vpn)*1.0 + u*0.01;
 
