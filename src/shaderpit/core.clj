@@ -143,16 +143,21 @@
   (let [shaderlist (load-shader-dir)
         current-shader (first shaderlist)
         shaderobj (q/load-shader (current-shader :path))
-        render-width (int (/ (q/width) 2))
-        render-height (int (/ (q/height) 2))]
+        render-width (int (/ (q/width) (initial-state :pixel-scale)))
+        render-height (int (/ (q/height) (initial-state :pixel-scale)))]
+        ;render-width (int (/ (q/width) 2))
+        ;render-height (int (/ (q/height) 2))]
     ;(q/smooth)
     (q/no-cursor)
     (q/texture-mode :normal)
     ;(q/texture-wrap :repeat)
     (q/noise-detail 2)
     (q/hint :disable-depth-test)
-    (q/frame-rate 60)
+    (q/frame-rate 60)    
+    (q/image-mode :center)
+
     (reset! gr (q/create-graphics render-width render-height :p2d))
+
     (def console-font (q/load-font "data/FreeMono-16.vlw"))
     (def console-font (q/load-font "data/AmericanTypewriter-24.vlw"))
     ;(reset! tex1 (q/load-image "testpattern4po6.png"))
@@ -299,9 +304,10 @@
         wup [0.0 -1.0 0.0] ; world up
         vpn (cam :vpn)
         vpv (vec3-normalize (vec3-cross (cam :vpn) [0.0 -1.0 0.0]))
-        speed (* (cam :speed) (state :t-delta))
+        ;speed (* (cam :speed) (state :t-delta))
         vel (cam :vel)
-        acc (* 1.0 (state :t-delta))
+        acc (* (cam :speed) (state :t-delta))
+        ;acc (* 1.0 (state :t-delta))
         nacc (- acc)
         ;speed (get-in state [:camera :speed])
         ;vpu (vec3-normalize (vec3-cross vpn vpv)) ;viewplane up
@@ -315,8 +321,8 @@
           \x (fn [s] (assoc-in s [:camera :vel] (vec3-scale vel 0.9)))
           \b (fn [s] (update-in s [:params :blend_coef] #(- % 0.1)))
           \n (fn [s] (update-in s [:params :blend_coef] #(+ % 0.1)))
-          \1 (fn [s] (update-in s [:camera :speed] #(* % 0.9)))
-          \2 (fn [s] (update-in s [:camera :speed] #(/ % 0.9)))
+          \1 (fn [s] (update-in s [:camera :speed] #(* % 0.99)))
+          \2 (fn [s] (update-in s [:camera :speed] #(/ % 0.99)))
           \- (fn [s] (update-in s [:camera :fov] #(* % 0.99)))
           \= (fn [s] (update-in s [:camera :fov] #(/ % 0.99)))
           \f (fn [s] (update-in s [:camera :damp-r] #(* % 0.99)))
@@ -331,8 +337,6 @@
           \6 (fn [s] (update-in s [:params :gamma] #(+ % 0.01)))
           \7 (fn [s] (update-in s [:params :glow-intensity] #(- % 0.01)))
           \8 (fn [s] (update-in s [:params :glow-intensity] #(+ % 0.01)))
-          \9 (fn [s] update-in s [:pixel-scale] #(int (max (- % 1) 1)))
-          \0 (fn [s] update-in s [:pixel-scale] #(int (+ % 1)))
           \l (fn [s] (update-in s [:params :diff-spec] #(max 0.0 (- % 0.01))))
           \p (fn [s] (update-in s [:params :diff-spec] #(min 1.0 (+ % 0.01))))
           ;KeyEvent/VK_ALT (fn [s] (do 
@@ -391,12 +395,18 @@
          state)
     \R (do (-> state
                (assoc :camera initial-camera)
-               (assoc :aspect-ratio (/ (float (q/width)) (q/height)))))
+               (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
+               (assoc-in [:camera :pos] [5.0 5.0 0.0])
+               ))
 ;    \R (do (-> initial-state
 ;               (assoc :aspect-ratio (/ (float (q/width)) (q/height)))))
-    \0 (do (-> state
-               (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
-               (assoc-in [:camera :pos] [0.0 0.0 0.0])))
+    ;\0 (do (-> state
+    ;           (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
+    ;           (assoc-in [:camera :pos] [0.0 0.0 0.0])))
+
+    \9 (update-in state [:pixel-scale] #(int (max (- % 1) 1)))
+    \0 (update-in state [:pixel-scale] #(int (+ % 1)))
+
     \m (do
          (if (state :mousewarp)
            (q/cursor)
@@ -427,18 +437,19 @@
 
 
 (defn handle-resize [state]
-  (when (or (not= (state :render-width) (int (/ (q/width) 2)))
-            (not= (state :render-height) (int (/ (q/height) 2))))
+  (when (or (not= (state :render-width) (int (/ (q/width) (state :pixel-scale))))
+            (not= (state :render-height) (int (/ (q/height) (state :pixel-scale)))))
     (.dispose @gr)
-    (reset! gr (q/create-graphics (int (/ (q/width) 2)) (int (/ (q/height) 2))  :p2d))
+    (reset! gr (q/create-graphics (int (/ (q/width) (state :pixel-scale)))
+                                  (int (/ (q/height) (state :pixel-scale)))  :p2d))
     (println (format "resize %sx%s" (.width @gr) (.height @gr)))))
 
 
 (defn update [state]
   (handle-resize state)
   (-> state
-      (assoc :render-width (int (/ (q/width) 2)))
-      (assoc :render-height (int (/ (q/height) 2)))
+      (assoc :render-width (int (/ (q/width) (state :pixel-scale))))
+      (assoc :render-height (int (/ (q/height) (state :pixel-scale))))
       (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
       (clock-tick)
       (do-movement-keys)
@@ -470,32 +481,33 @@
         diff_spec (get-in state [:params :diff-spec] 0.5)
         lines [
                ;(str "state: " state)
-               (str (format "time %.2f" (state :t-now)))
-               (str (format "dt %.5f" (state :t-delta)))
-               (str (format "dim: %dx%d" (state :render-width) (state :render-height)))
                (str "shader: " shadername)
+               (str (format "dim: %dx%d" (state :render-width) (state :render-height)))
+               (str (format "pix: %d"  (state :pixel-scale)))
+               (str (format "fov: %.2f"  fovdeg))
+               (str (format "ar: %.2f" ar))
                (str "pos: " (vec3-format pos))
+               (str (format "speed: %.6f" speed))
                (str (format "az: %.2f" az))
                (str (format "alt: %.2f" alt))
                (str (format "dampm: %.4f" dampm))
                (str (format "dampr: %.4f" dampr))
                (str (format "mouse: [%.2f %.2f]" (float mx) (float my)))
-               (str (format "speed: %.6f" speed))
-               (str (format "ar: %.2f" ar))
                (str (format "eps: %.8f" eps))
-               (str (format "fov: %.2f"  fovdeg))
                (str (format "blend: %.2f" blend))
                (str (format "gamma: %.2f" gamma))
                (str (format "glow: %.2f" glow))
                (str (format "pal: %.2f" pal-off))
                (str (format "d/s: %.2f" diff_spec))
                ;(str "camera: " (state :camera))
+               (str (format "time %.2f" (state :t-now)))
+               (str (format "dt %.5f" (state :t-delta)))
                (str (format "fps: %.2f" (float (q/current-frame-rate))))
                ]]
     ;(q/fill 255 255 255 255)
     (q/no-stroke)
     (doseq [i (range (count lines))]
-      (q/fill 0 0 0 128)
+      (q/fill 0 0 0 192)
       (q/rect (- x 6) (- (+ y (* i line-space)) 20)
               (+ (q/text-width (lines i)) 12) 26 12)
       (q/fill 255 255 255 192)
@@ -515,24 +527,38 @@
 
 
 (defn draw [state]
+  ;(q/background 0)
+  ;(q/image-mode :center)
   (let [rc [(* (state :render-width) 0.5) (* (state :render-height) 0.5)]
         sc [(* (q/width) 0.5) (* (q/height) 0.5)]
+        
+        wc (vec2-sub sc rc)
         shd (get-in state [:current-shader :shaderobj])
         ]
     (q/with-graphics @gr
       (q/with-translation rc
-        (q/scale (sc 0) (sc 1))
+        (q/scale (rc 0) (rc 1))
 
+        ;(q/fill 255)
         (when (q/loaded? shd)
           (q/shader shd))
-        (draw-quad state (get state :aspect-ratio 1.0))))
+        (draw-quad state (get state :aspect-ratio 1.0))
+        ;(q/no-fill)
+        ;(q/stroke 0 255 0)
+        ;(q/stroke-weight 5)
+        ;(draw-quad state (get state :aspect-ratio 1.0))
+        ;(q/rect 0 0 (state :render-width) (state :render-height))
+        ))
+    
 
     (q/reset-shader)
-    ;(q/image @gr 0 0 (sc 0) (sc 1))
-    (q/image @gr 0 0 (q/width) (q/height))
-    (draw-info state 32 (- (q/height) 600))
+    (q/image @gr (sc 0) (sc 1) (* (q/width) 2) (* (q/height) 2))
+    (draw-info state 32 (- (q/height) 620))
   ))
 
+(defn settings []
+  (q/no-smooth)
+  )
 
 (defn -main [& args]
   (q/defsketch shaderpit
@@ -544,7 +570,7 @@
     ;:size :fullscreen
     :features [:resizable]
     ;:features [:present :resizable]
-    :settings #(q/smooth 8)
+    :settings settings
     ;:settings #(q/pixel-density 2)
     ;:settings #(q/pixel-density (q/display-density)) 
     :renderer :p2d
