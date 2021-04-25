@@ -6,7 +6,7 @@ precision mediump int;
 #endif
 
 #define MAX_RAY_STEPS 256
-#define SPREAD vec3(150.0, 0.0, 150.0)
+#define SPREAD vec3(32.0, 0.0, 32.0)
 /*
    Based on tutorial at:
    http://www.geeks3d.com/20130524/building-worlds-with-distance-functions-in-glsl-raymarching-glslhacker-tutorial-opengl/
@@ -526,7 +526,7 @@ vec2 random_prim(vec3 p, float h, vec3 id) {
 }
 
 vec2 cube_field(vec3 p, float h, vec3 id, float soff) {
-    float cs = 20.0;
+    float cs = 4.0;
     float n = (1.0+floor(noise2d(id.xz*NOISE_DETAIL2) * 2.0)) * cs;
 //    return op_union(
 //            random_prim(p-vec3(0.0,n+cs+soff*2.0,0.0), h, id),
@@ -909,7 +909,7 @@ void main(void) {
 
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=768.0; //Max depth
+    const float maxd=2048.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 

@@ -35,7 +35,7 @@ const float NOISE_DETAIL2 =0.2;
 
 const float MB_INNER_SPHERE = 0.72;
 const float MBOX_SCALE = 8.0;
-const float MBULB_SCALE = 128.0;
+const float MBULB_SCALE = 8.0;
 
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
