@@ -271,13 +271,14 @@
         vpn (vec3-normalize [(* (Math/cos alt) (Math/cos az))
                              (Math/sin alt)
                              (* (Math/cos alt) (Math/sin az))])
-        lookat (vec3-add (cam :pos) (vec3-scale vpn 2.0))
 
         pos (vec3-add (cam :pos)
                       (vec3-scale (vec3-scale (cam :vel) (- dampm-dt 1.0))
                                   (/ 1.0 (Math/log dampm))))
 
         vel (vec3-scale (cam :vel) dampm-dt)
+        
+        lookat (vec3-add pos (vec3-scale vpn 6.0))
 
         ;pos (+ (cam :pos) vel)
         new-cam (-> (state :camera)
