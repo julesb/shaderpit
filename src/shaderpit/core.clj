@@ -266,7 +266,6 @@
         vpn (vec3-normalize [(* (Math/cos alt) (Math/cos az))
                              (Math/sin alt)
                              (* (Math/cos alt) (Math/sin az))])
-        ;lookat (vec3-add (cam :pos) (vec3-scale vpn 6.0))
 
         pos (vec3-add (cam :pos)
                       (vec3-scale (vec3-scale (cam :vel) (- dampm-dt 1.0))
@@ -276,7 +275,6 @@
 
         lookat (vec3-add pos (vec3-scale vpn 6.0))
 
-        ;pos (+ (cam :pos) vel)
         new-cam (-> (state :camera)
                     (assoc :az az)
                     (assoc :alt alt)
@@ -384,7 +382,7 @@
            (do
              (q/no-loop)
              (q/cursor)))
-         (center-cursor)
+         ;(center-cursor)
          (-> state
           (update-in [:render-paused?] not)
           (assoc-in [:mousewarp] (state :render-paused?))))
@@ -475,6 +473,7 @@
                ;(str "state: " state)
                (str "shader: " shadername)
                (str (format "dim: %dx%d" (state :render-width) (state :render-height)))
+               (str (format "fov: %.2f"  fovdeg))
                (str (format "ar: %.2f" ar))
                (str "pos: " (vec3-format pos))
                (str (format "speed: %.6f" speed))
@@ -485,7 +484,6 @@
                (str (format "dampr: %.4f" dampr))
                (str (format "mouse: [%.2f %.2f]" (float mx) (float my)))
                (str (format "eps: %.8f" eps))
-               (str (format "fov: %.2f"  fovdeg))
                (str (format "blend: %.2f" blend))
                (str (format "gamma: %.2f" gamma))
                (str (format "glow: %.2f" glow))
