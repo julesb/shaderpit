@@ -1,6 +1,7 @@
 (ns shaderpit.core
   (:require [quil.core :as q]
-            [quil.middleware :as m])
+            [quil.middleware :as m]
+            [shaderpit.metrics :as mtr])
   (:use [shaderpit.vector])
   (:import java.awt.event.KeyEvent
            (java.awt Robot)
@@ -153,7 +154,11 @@
     (q/hint :disable-depth-test)
     (q/frame-rate 60)
     (reset! gr (q/create-graphics render-width render-height :p2d))
-    (def console-font (q/load-font "data/FreeMono-16.vlw"))
+
+    (mtr/init)
+    (mtr/init-graphics)
+
+    ;(def console-font (q/load-font "data/FreeMono-16.vlw"))
     (def console-font (q/load-font "data/AmericanTypewriter-24.vlw"))
     ;(reset! tex1 (q/load-image "testpattern4po6.png"))
     ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
@@ -520,6 +525,7 @@
   (let [rc [(* (state :render-width) 0.5) (* (state :render-height) 0.5)]
         sc [(* (q/width) 0.5) (* (q/height) 0.5)]
         shd (get-in state [:current-shader :shaderobj])
+        t-render-start (System/nanoTime)
         ]
     (q/with-graphics @gr
       (q/with-translation rc
@@ -528,10 +534,14 @@
         (when (q/loaded? shd)
           (q/shader shd))
         (draw-quad state (get state :aspect-ratio 1.0))))
-
+    
+    (mtr/capture :t-render (/ (float (- (System/nanoTime) t-render-start)) 1000000000.0))
+    (mtr/capture :fps (q/current-frame-rate))
+    
     (q/reset-shader)
-    ;(q/image @gr 0 0 (sc 0) (sc 1))
     (q/image @gr 0 0 (q/width) (q/height))
+    
+    (mtr/draw-all 20 20)
     (draw-info state 32 (- (q/height) 600))
   ))
 
