@@ -307,6 +307,24 @@
       (assoc :camera new-cam))))
 
 
+(defn render-start! [state]
+  (q/start-loop)
+  (when (= (state :camera-model) :3d)
+    (q/no-cursor))
+    (-> state
+      (assoc :render-paused? false)
+      (assoc :t-delta 0.0)
+      (assoc-in [:mousewarp] (= (state :camera-model) :3d))))
+
+(defn render-pause! [state]
+  (q/no-loop)
+  (q/cursor)
+  (-> state
+     (assoc :render-paused? true)
+     (assoc :t-delta 0.0)
+     (assoc-in [:mousewarp] false)))
+
+
 (defn do-key-movement [state keychar]
   (let [cam (state :camera)
         pos-old  (cam :pos)
@@ -390,22 +408,8 @@
   (case (event :raw-key)
     \  (do
          (if (state :render-paused?)
-           (do 
-             (q/start-loop)
-             (when (= (state :camera-model) :3d)
-               (q/no-cursor))
-             (-> state
-                 (assoc :render-paused? false)
-                 (assoc :t-delta 0.0)
-                 (assoc-in [:mousewarp] (= (state :camera-model) :3d))
-                 ))
-           (do
-             (q/no-loop)
-             (q/cursor)
-             (-> state
-                 (assoc :render-paused? true)
-                 (assoc :t-delta 0.0)
-                 (assoc-in [:mousewarp] false)))))
+           (render-start! state)
+           (render-pause! state)))
     \# (do
          (q/save-frame)
          state)
