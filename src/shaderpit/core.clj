@@ -448,19 +448,23 @@
 
 
 (defn handle-resize [state]
-  (when (or (not= (state :render-width) (int (/ (q/width) 2)))
-            (not= (state :render-height) (int (/ (q/height) 2))))
-    (.dispose @gr)
-    (reset! gr (q/create-graphics (int (/ (q/width) 2)) (int (/ (q/height) 2))  :p2d))
-    (println (format "resize %sx%s" (.width @gr) (.height @gr)))))
+  (if (or (not= (state :render-width) (int (/ (q/width) 2)))
+          (not= (state :render-height) (int (/ (q/height) 2))))
+    (do
+      (.dispose @gr)
+      (reset! gr (q/create-graphics (int (/ (q/width) 2))
+                                    (int (/ (q/height) 2))  :p2d))
+      (println (format "resize %sx%s" (.width @gr) (.height @gr)))
+      (-> state
+          (assoc :render-width (int (/ (q/width) 2)))
+          (assoc :render-height (int (/ (q/height) 2)))
+          (assoc :aspect-ratio (/ (float (q/width)) (q/height)))))
+    state))
 
 
 (defn update [state]
-  (handle-resize state)
   (-> state
-      (assoc :render-width (int (/ (q/width) 2)))
-      (assoc :render-height (int (/ (q/height) 2)))
-      (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
+      (handle-resize)
       (clock-tick)
       (do-movement-keys)
       (camera-update)
