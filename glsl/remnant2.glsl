@@ -5,7 +5,7 @@ precision mediump float;
 precision mediump int;
 #endif
 
-#define MAX_RAY_STEPS 192
+#define MAX_RAY_STEPS 256
 vec3 prim_cols[9];
 
 uniform sampler2D texture;
@@ -621,6 +621,10 @@ void main(void) {
         //vec3 fc = vec3(phong+lamb+c*(1.0-stepbri))*0.25 * AO * shad;
         fc += glow;
         //fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
+        
+        // vignette
+        fc *= 1. - dot(vPos, vPos);
+        
         fc = pow(fc, vec3(gamma));
         gl_FragColor = vec4(fc, 1.0);
     }

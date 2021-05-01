@@ -5,7 +5,7 @@ precision mediump float;
 precision mediump int;
 #endif
 
-#define MAX_RAY_STEPS 256
+#define MAX_RAY_STEPS 1034
 vec3 prim_cols[9];
 
 uniform sampler2D texture;

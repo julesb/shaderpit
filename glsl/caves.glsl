@@ -910,7 +910,7 @@ void main(void) {
 
     // Raymarching.
     const vec3 e=vec3(0.02,0,0);
-    const float maxd=2048.0; //Max depth
+    const float maxd=4096.0; //Max depth
     vec2 d=vec2(0.01,0.0);
     vec3 c,p,N;
 
