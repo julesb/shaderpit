@@ -10,17 +10,17 @@
 
 (def metricdefs {
   :t-render {
-    :label "Render time"
+    :label "Render"
     :values [0 0 0]
     :minval 0.0
     :maxval (/ 1.0 60.0)
     :g nil
   }
   :t-frame {
-    :label "Frame time"
+    :label "Frame"
     :values [0 0 0]
     :minval 0.0
-    :maxval 1.0
+    :maxval (/ 1.0 30.0)
     :g nil
   }
   :fps {
@@ -87,7 +87,7 @@
       (q/rect x (+ y (* i height) (* i margin)) width height)
       (q/fill 255)
       (q/text ((@metrics (mks i)) :label)
-            x (+ y (* i height) (* i margin)))
+            (+ x 1) (+ y 11 (* i height) (* i margin)))
     )
   ))
 
