@@ -254,8 +254,8 @@
                                       [(int (/ (q/screen-width) 2))
                                        (int (/ (q/screen-height) 2))])
                             0.5) ; mouse sensitivity factor
-        mx (if (state :mousewarp) mx 0.0)
-        my (if (state :mousewarp) my 0.0)
+        mx (if (and (state :mousewarp) (q/focused)) mx 0.0)
+        my (if (and (state :mousewarp) (q/focused)) my 0.0)
         dt (state :t-delta)
         az-vel  (+ (cam :az-vel) (* mx dt))
         alt-vel (+ (cam :alt-vel) (* my dt))
@@ -305,6 +305,12 @@
 
   (-> state
       (assoc :camera new-cam))))
+
+(defn camera-reset [state]
+  (-> state
+      (assoc :camera initial-camera)
+      (assoc :aspect-ratio (/ (float (q/width)) (q/height))))
+  )
 
 
 (defn render-start! [state]
@@ -413,11 +419,8 @@
     \# (do
          (q/save-frame)
          state)
-    \R (do (-> state
-               (assoc :camera initial-camera)
-               (assoc :aspect-ratio (/ (float (q/width)) (q/height)))))
-;    \R (do (-> initial-state
-;               (assoc :aspect-ratio (/ (float (q/width)) (q/height)))))
+    \R (do
+         (camera-reset state))
     \0 (do (-> state
                (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
                (assoc-in [:camera :pos] [0.0 0.0 0.0])))
