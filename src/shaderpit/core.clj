@@ -64,6 +64,7 @@
   :render-width 0
   :render-height 0
   :aspect-ratio 1.0
+  :camera-model :3d ; :3d = 3d first person, :2d = 2d pan and zoom
   :pixel-scale (int 2)
   :render-paused? false
   :camera initial-camera
@@ -391,12 +392,12 @@
          (if (state :render-paused?)
            (do 
              (q/start-loop)
-             (when (state :mousewarp)
+             (when (= (state :camera-model) :3d)
                (q/no-cursor))
              (-> state
                  (assoc :render-paused? false)
                  (assoc :t-delta 0.0)
-                 ;(assoc-in [:mousewarp] (state :render-paused?))
+                 (assoc-in [:mousewarp] (= (state :camera-model) :3d))
                  ))
            (do
              (q/no-loop)
@@ -422,6 +423,11 @@
            (q/no-cursor)) 
          (-> state
              (update-in [:mousewarp] not)))
+    \M (do
+         (-> state
+             (assoc :camera-model
+                    (if (= (state :camera-model) :2d) :3d :2d) )
+              (assoc :mousewarp (= (state :camera-model) :3d))))
     \` (do 
             (-> state
                 (clock-reset)
