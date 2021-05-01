@@ -33,7 +33,7 @@
   })
 
 (def initial-camera {
-  :pos [128.0 50.0 0.0]
+  :pos [5.0 1.0 0.0]
   :az 0.0
   :alt 0.0
   :az-vel 0.0
@@ -49,7 +49,7 @@
 
 (def initial-params {
   :blend_coef 10.0
-  :ray_hit_epsilon 0.01
+  :ray_hit_epsilon 0.001
   :palette_offset 0.0
   :gamma 0.55
   :glow-intensity 0.0
@@ -149,7 +149,7 @@
     ;(q/smooth)
     (q/no-cursor)
     (q/texture-mode :normal)
-    ;(q/texture-wrap :repeat)
+    (q/texture-wrap :repeat)
     (q/noise-detail 2)
     (q/hint :disable-depth-test)
     (q/frame-rate 60)
@@ -168,9 +168,11 @@
     ;(reset! tex1 (q/load-image "North_South_Panorama_Equirect_360x180.jpg"))
     ;(reset! tex1 (q/load-image "QueensPark.m.jpg"))
     ;(reset! tex1 (q/load-image "beach-hdr-blur128.jpg"))
+    (reset! tex1 (q/load-image "sphericalsky-b.jpg"))
+    ;(reset! tex1 (q/load-image "cube-grid.png"))
     ;(reset! tex1 (q/load-image "cubesphere.jpg"))
     ;(reset! tex1 (q/load-image "stereographic.jpg"))
-    (reset! tex1 (q/load-image "sphere_map_floor_gradient.jpg"))
+    ;(reset! tex1 (q/load-image "sphere_map_floor_gradient.jpg"))
     ;(reset! tex1 (q/load-image "cave_texture_01-512x512.png"))
     ;(reset! tex1 (q/load-image "seamless-black-wall-texture-decorating-inspiration-1.jpg"))
     ;(reset! tex1 (q/load-image "beach-hdr.jpg"))
@@ -192,6 +194,8 @@
 (defn update-uniforms! [state shader] 
   (when state
     (let [mp (get state :mouse-position [0 0])
+          m (vec2-div (get state :mouse-position [0 0])
+                      [(/ 1.0 (q/width)) (/ 1.0 (q/height))])
           ar (state :aspect-ratio)
           cam-pos (get-in state [:camera :pos])
           cam-lookat (get-in state [:camera :lookat])
@@ -199,12 +203,13 @@
           ]
       (.set shader "framecount" (float (q/frame-count)))
       (.set shader "aspect_ratio" (float ar))
-      ;(when (mouse-pressed?)
-        (.set shader "mousex" (float (mp 0)))
-        (.set shader "mousey" (float (mp 1)))
-      ;  )
+      (.set shader "mousex" (float (mp 0)))
+      (.set shader "mousey" (float (mp 1)))
+      (.set shader "mouse" (float (m 0)) (float (m 1)))
       (.set shader "swidth" (float (state :render-width)))
       (.set shader "sheight" (float (state :render-height)))
+      (.set shader "resolution" (float (state :render-width))
+                                (float (state :render-height)))
       (.set shader "cam_pos" (float (cam-pos 0)) 
                              (float (cam-pos 1))
                              (float (cam-pos 2)))
@@ -219,6 +224,7 @@
       (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
       (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
       (.set shader "time" (float (state :t-now)))
+      (.set shader "tex1" @tex1)
       ;(.set shader "time" (float (/ (q/millis) 1000.0)))
 
       )
@@ -247,6 +253,8 @@
                                       [(int (/ (q/screen-width) 2))
                                        (int (/ (q/screen-height) 2))])
                             0.5) ; mouse sensitivity factor
+        mx (if (state :mousewarp) mx 0.0)
+        my (if (state :mousewarp) my 0.0)
         dt (state :t-delta)
         az-vel  (+ (cam :az-vel) (* mx dt))
         alt-vel (+ (cam :alt-vel) (* my dt))
@@ -264,8 +272,8 @@
                (/ (* alt-vel (- dampr-dt 1.0))
                   (Math/log dampr)))
         alt-vel (* alt-vel dampr-dt)
-
-        az (wrap-n az 0.0 TWOPI)
+        az (mod az TWOPI)
+        ;az (wrap-n az 0.0 TWOPI)
         alt (q/constrain alt (- SMALLPI2) SMALLPI2)
 
         vpn (vec3-normalize [(* (Math/cos alt) (Math/cos az))
@@ -383,14 +391,20 @@
          (if (state :render-paused?)
            (do 
              (q/start-loop)
-             (q/no-cursor))
+             (when (state :mousewarp)
+               (q/no-cursor))
+             (-> state
+                 (assoc :render-paused? false)
+                 (assoc :t-delta 0.0)
+                 ;(assoc-in [:mousewarp] (state :render-paused?))
+                 ))
            (do
              (q/no-loop)
-             (q/cursor)))
-         ;(center-cursor)
-         (-> state
-          (update-in [:render-paused?] not)
-          (assoc-in [:mousewarp] (state :render-paused?))))
+             (q/cursor)
+             (-> state
+                 (assoc :render-paused? true)
+                 (assoc :t-delta 0.0)
+                 (assoc-in [:mousewarp] false)))))
     \# (do
          (q/save-frame)
          state)
@@ -422,13 +436,15 @@
 
 (defn mouse-moved [state event]
   (-> state
-      (assoc :mouse-position [(int (/ (event :x) (q/width)))
-                              (int (/ (event :y) (q/height)))])))
-       
+      ;(assoc :mouse-position [(int (/ (event :x) (q/width)))
+      ;                        (int (/ (event :y) (q/height)))])
+      ))
+
 
 (defn mouse-dragged [state event]
     (-> state
-        (assoc :mouse-position [(event :x) (event :y)])))
+        (assoc :mouse-position [(/ (float (event :x)) (q/width))
+                                (/ (float (event :y)) (q/height))])))
 
 
 (defn handle-resize [state]
@@ -513,7 +529,6 @@
 
 (defn draw-quad [state ar]
   (q/begin-shape :quads)
-    ;(q/texture @tex1)
     (q/vertex -1 -1 0 0)
     (q/vertex  1 -1 ar 0)
     (q/vertex  1  1 ar 1)
@@ -525,18 +540,20 @@
   (let [rc [(* (state :render-width) 0.5) (* (state :render-height) 0.5)]
         sc [(* (q/width) 0.5) (* (q/height) 0.5)]
         shd (get-in state [:current-shader :shaderobj])
+        ar (get state :aspect-ratio 1.0)
         t-render-start (System/nanoTime)
         ]
     (q/with-graphics @gr
+      (q/texture-wrap :repeat)
       (q/with-translation rc
         (q/scale (sc 0) (sc 1))
-
         (when (q/loaded? shd)
           (q/shader shd))
-        (draw-quad state (get state :aspect-ratio 1.0))))
+        (draw-quad state ar)))
     
     (mtr/capture :t-render (/ (float (- (System/nanoTime) t-render-start)) 1000000000.0))
     (mtr/capture :fps (q/current-frame-rate))
+    (mtr/capture :t-frame (state :t-delta))
     
     (q/reset-shader)
     (q/image @gr 0 0 (q/width) (q/height))
