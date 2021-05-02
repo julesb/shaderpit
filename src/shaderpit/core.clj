@@ -79,7 +79,7 @@
 
 
 (defn ns-time []
-  (double (/ (System/nanoTime) 1000000000.0)))
+  (System/nanoTime))
 
 
 (defn clock-reset [state]
@@ -91,7 +91,7 @@
 
 (defn clock-tick [state]
   (let [ns-now (ns-time)
-        ns-delta (- ns-now (state :t-prev-ns)) ]
+        ns-delta (double (/ (- ns-now (state :t-prev-ns)) 1000000000))]
     (-> state
         (assoc :t-prev-ns ns-now)
         (update-in [:t-now] + ns-delta)
@@ -319,7 +319,6 @@
     (q/no-cursor))
     (-> state
       (assoc :render-paused? false)
-      (assoc :t-delta 0.0)
       (assoc :t-prev-ns (ns-time))
       (assoc-in [:mousewarp] (= (state :camera-model) :3d))))
 
@@ -328,7 +327,6 @@
   (q/cursor)
   (-> state
      (assoc :render-paused? true)
-     (assoc :t-delta 0.0)
      (assoc-in [:mousewarp] false)))
 
 
@@ -338,12 +336,9 @@
         wup [0.0 -1.0 0.0] ; world up
         vpn (cam :vpn)
         vpv (vec3-normalize (vec3-cross (cam :vpn) [0.0 -1.0 0.0]))
-        ;speed (* (cam :speed) (state :t-delta))
         vel (cam :vel)
         acc (* (cam :speed) (state :t-delta))
         nacc (- acc)
-        ;speed (get-in state [:camera :speed])
-        ;vpu (vec3-normalize (vec3-cross vpn vpv)) ;viewplane up
         key-movement-map {
           \w (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpn acc))))
           \s (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpn nacc))))
@@ -352,16 +347,16 @@
           \e (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup nacc))))
           \c (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup acc))))
           \x (fn [s] (assoc-in s [:camera :vel] (vec3-scale vel 0.9)))
-          \b (fn [s] (update-in s [:params :blend_coef] #(- % 0.05)))
-          \n (fn [s] (update-in s [:params :blend_coef] #(+ % 0.05)))
-          \1 (fn [s] (update-in s [:camera :speed] #(* % 0.9)))
-          \2 (fn [s] (update-in s [:camera :speed] #(/ % 0.9)))
+          \1 (fn [s] (update-in s [:camera :speed] #(* % 0.99)))
+          \2 (fn [s] (update-in s [:camera :speed] #(/ % 0.99)))
           \- (fn [s] (update-in s [:camera :fov] #(* % 0.99)))
           \= (fn [s] (update-in s [:camera :fov] #(/ % 0.99)))
           \f (fn [s] (update-in s [:camera :damp-r] #(* % 0.99)))
           \t (fn [s] (update-in s [:camera :damp-r] #(/ % 0.99)))
           \g (fn [s] (update-in s [:camera :damp-m] #(* % 0.99)))
           \y (fn [s] (update-in s [:camera :damp-m] #(/ % 0.99)))
+          \b (fn [s] (update-in s [:params :blend_coef] #(- % 0.05)))
+          \n (fn [s] (update-in s [:params :blend_coef] #(+ % 0.05)))
           \[ (fn [s] (update-in s [:params :ray_hit_epsilon] #(* % 0.9)))
           \] (fn [s] (update-in s [:params :ray_hit_epsilon] #(min 0.01 (/ % 0.9))))
           \3 (fn [s] (update-in s [:params :palette_offset] #(- % 0.005)))
@@ -370,20 +365,17 @@
           \6 (fn [s] (update-in s [:params :gamma] #(+ % 0.01)))
           \7 (fn [s] (update-in s [:params :glow-intensity] #(- % 0.01)))
           \8 (fn [s] (update-in s [:params :glow-intensity] #(+ % 0.01)))
-          \9 (fn [s] update-in s [:pixel-scale] #(int (max (- % 1) 1)))
-          \0 (fn [s] update-in s [:pixel-scale] #(int (+ % 1)))
+          ;\9 (fn [s] update-in s [:pixel-scale] #(int (max (- % 1) 1)))
+          ;\0 (fn [s] update-in s [:pixel-scale] #(int (+ % 1)))
           \l (fn [s] (update-in s [:params :diff-spec] #(max 0.0 (- % 0.01))))
           \p (fn [s] (update-in s [:params :diff-spec] #(min 1.0 (+ % 0.01))))
           ;KeyEvent/VK_ALT (fn [s] (do 
           ;                (println "ALT")
           ;                s))
          }]
-    ;state))
-  (if (contains? key-movement-map keychar)
-    (-> ((key-movement-map keychar) state)
-        ;;(camera-update)
-        )
-    state)))
+    (if (contains? key-movement-map keychar)
+      ((key-movement-map keychar) state)
+      state)))
 
 
 (defn do-movement-keys [state & keys-down]
