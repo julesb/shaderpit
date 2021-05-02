@@ -313,7 +313,7 @@
 
 
 (defn render-start! [state]
-  ;(reset! t-prev-ns (ns-time)) ; so we dont get a huge t-delta
+  (center-cursor)
   (q/start-loop)
   (when (= (state :camera-model) :3d)
     (q/no-cursor))
