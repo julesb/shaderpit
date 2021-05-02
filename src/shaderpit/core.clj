@@ -21,7 +21,7 @@
 (def robot (new Robot))
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
-(def t-init (atom 0))
+
 ; =========================================================================
 
 (def default-shader {
@@ -72,30 +72,30 @@
   :shaders {}
   :current-shader nil
   :t-now 0.0
-  :t-init 0.0
   :t-delta 0.0
+  :t-prev-ns 0
 })
 
 
 
-(defn ns-time [state]
-  (- (double (/ (System/nanoTime) 1000000000.0)) @t-init))
+(defn ns-time []
+  (double (/ (System/nanoTime) 1000000000.0)))
 
 
 (defn clock-reset [state]
-  (reset! t-init (double (/ (System/nanoTime) 1000000000.0)))
   (-> state
-      (assoc :t-init @t-init)
-      (assoc :t-now (ns-time state))
+      (assoc :t-prev-ns (ns-time))
+      (assoc :t-now 0.0)
       (assoc :t-delta 0.0)))
 
 
 (defn clock-tick [state]
-  (let [t-new (ns-time state)]
+  (let [ns-now (ns-time)
+        ns-delta (- ns-now (state :t-prev-ns)) ]
     (-> state
-      (assoc :t-now t-new)
-      (assoc :t-delta (- t-new (state :t-now))))))
-
+        (assoc :t-prev-ns ns-now)
+        (update-in [:t-now] + ns-delta)
+        (assoc :t-delta ns-delta))))
 
 (defn center-cursor []
   (.mouseMove robot (int (/ (q/screen-width) 2))
@@ -188,7 +188,6 @@
          (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
          (clock-reset)
          )
-
   ))
 
 
@@ -314,12 +313,14 @@
 
 
 (defn render-start! [state]
+  ;(reset! t-prev-ns (ns-time)) ; so we dont get a huge t-delta
   (q/start-loop)
   (when (= (state :camera-model) :3d)
     (q/no-cursor))
     (-> state
       (assoc :render-paused? false)
       (assoc :t-delta 0.0)
+      (assoc :t-prev-ns (ns-time))
       (assoc-in [:mousewarp] (= (state :camera-model) :3d))))
 
 (defn render-pause! [state]
