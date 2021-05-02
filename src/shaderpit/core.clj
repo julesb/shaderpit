@@ -71,9 +71,9 @@
   :params initial-params
   :shaders {}
   :current-shader nil
-  :t-now 0.0
-  :t-delta 0.0
-  :t-prev-ns 0
+  :ns-now 0
+  :ns-delta 0
+  :ns-prev 0
 })
 
 
@@ -84,18 +84,27 @@
 
 (defn clock-reset [state]
   (-> state
-      (assoc :t-prev-ns (ns-time))
-      (assoc :t-now 0.0)
-      (assoc :t-delta 0.0)))
+      (assoc :ns-prev (ns-time))
+      (assoc :ns-now 0)
+      (assoc :ns-delta 0)))
 
 
 (defn clock-tick [state]
   (let [ns-now (ns-time)
-        ns-delta (double (/ (- ns-now (state :t-prev-ns)) 1000000000))]
+        ns-delta (- ns-now (state :ns-prev))]
     (-> state
-        (assoc :t-prev-ns ns-now)
-        (update-in [:t-now] + ns-delta)
-        (assoc :t-delta ns-delta))))
+        (assoc :ns-prev ns-now)
+        (update-in [:ns-now] + ns-delta)
+        (assoc :ns-delta ns-delta))))
+
+
+(defn t-delta [state]
+  (double (/ (state :ns-delta) 1000000000)))
+
+
+(defn t-now [state]
+  (double (/ (state :ns-now) 1000000000)))
+
 
 (defn center-cursor []
   (.mouseMove robot (int (/ (q/screen-width) 2))
@@ -223,7 +232,7 @@
       (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
       (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
       (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
-      (.set shader "time" (float (state :t-now)))
+      (.set shader "time" (float (t-now state)))
       (.set shader "tex1" @tex1)
       ;(.set shader "time" (float (/ (q/millis) 1000.0)))
 
@@ -255,7 +264,7 @@
                             0.5) ; mouse sensitivity factor
         mx (if (and (state :mousewarp) (q/focused)) mx 0.0)
         my (if (and (state :mousewarp) (q/focused)) my 0.0)
-        dt (state :t-delta)
+        dt (t-delta state)
         az-vel  (+ (cam :az-vel) (* mx dt))
         alt-vel (+ (cam :alt-vel) (* my dt))
         dampr (cam :damp-r)
@@ -319,7 +328,7 @@
     (q/no-cursor))
     (-> state
       (assoc :render-paused? false)
-      (assoc :t-prev-ns (ns-time))
+      (assoc :ns-prev (ns-time))
       (assoc-in [:mousewarp] (= (state :camera-model) :3d))))
 
 (defn render-pause! [state]
@@ -337,7 +346,7 @@
         vpn (cam :vpn)
         vpv (vec3-normalize (vec3-cross (cam :vpn) [0.0 -1.0 0.0]))
         vel (cam :vel)
-        acc (* (cam :speed) (state :t-delta))
+        acc (* (cam :speed) (t-delta state))
         nacc (- acc)
         key-movement-map {
           \w (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpn acc))))
@@ -521,8 +530,8 @@
                (str (format "pal: %.2f" pal-off))
                (str (format "d/s: %.2f" diff_spec))
                ;(str "camera: " (state :camera))
-               (str (format "time %.2f" (state :t-now)))
-               (str (format "dt %.5f" (state :t-delta)))
+               (str (format "time %.2f" (t-now state)))
+               (str (format "dt %.5f" (t-delta state)))
                (str (format "fps: %.2f" (float (q/current-frame-rate))))
                ]]
     ;(q/fill 255 255 255 255)
@@ -563,7 +572,7 @@
     
     (mtr/capture :t-render (/ (float (- (System/nanoTime) t-render-start)) 1000000000.0))
     (mtr/capture :fps (q/current-frame-rate))
-    (mtr/capture :t-frame (state :t-delta))
+    (mtr/capture :t-frame (t-delta state))
     
     (q/reset-shader)
     (q/image @gr 0 0 (q/width) (q/height))
