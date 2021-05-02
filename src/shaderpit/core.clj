@@ -1,7 +1,9 @@
 (ns shaderpit.core
   (:require [quil.core :as q]
             [quil.middleware :as m]
-            [shaderpit.metrics :as mtr])
+            [shaderpit.metrics :as mtr]
+            [clojure.string :as str]
+            [clojure.java.io :as io])
   (:use [shaderpit.vector])
   (:import java.awt.event.KeyEvent
            (java.awt Robot)
@@ -119,7 +121,7 @@
            type (default-shader :type) } }]
   (-> default-shader
       (assoc :id id)
-      (assoc :name path)
+      (assoc :name name)
       (assoc :path path)
       (assoc :type type) ))
 
@@ -129,13 +131,46 @@
        (filter #(re-matches #".+\.glsl$" %))))
 
 
+(defn shader-basename [shaderpath]
+  (-> shaderpath
+      (str/replace #"^\./glsl/" "")
+      (str/replace #"\.glsl$" "")))
+
+
 (defn load-shader-dir []
   (into []
-  (map-indexed #(define-shader :id %1
-                               :path (str "./glsl/" %2)
-                               :name %2)
-               (glsl-file-list)))
-)
+    (map-indexed #(define-shader :id %1
+                                 :path (str "./glsl/" %2)
+                                 :name (shader-basename %2))
+                 (glsl-file-list))))
+
+
+(defn make-save-state [state]
+  (-> state
+      (dissoc :aspect-ratio :keys-down :ns-delta :ns-prev
+              :render-width :render-height :shaders)
+      (update-in [:current-shader] dissoc :shaderobj)))
+
+
+(defn save-shader-state [state shaderdef]
+  (let [basename (shaderdef :name)
+        statepath (str "./state/" basename ".state")
+        savestate (make-save-state state)]
+    (println "save state: " statepath)
+    (spit statepath savestate)))
+
+
+(defn load-shader-state [state shaderdef]
+  (let [basename (shaderdef :name)
+        statepath (str "./state/" basename ".state")]
+    (if (.exists (io/file statepath))
+      (let [newstatestr (slurp statepath)
+            newstate (read-string newstatestr)]
+        (println "load state: " statepath)
+        (-> state
+            (merge newstate)
+            (assoc :ns-prev (ns-time))))
+      state)))
 
 
 (defn next-shader [state]
@@ -144,6 +179,7 @@
         newshader ((get state :shaders) newid)
         newshader-obj (q/load-shader (get newshader :path)) ]
     (-> state
+        (load-shader-state newshader)
         (assoc :current-shader newshader)
         (assoc-in [:current-shader :shaderobj] newshader-obj)
       )
@@ -444,8 +480,11 @@
                           (q/load-shader (get-in state [:current-shader :path])))))
     \/ (do
             (-> state
-                (clock-reset)
+                ;(clock-reset)
                 (next-shader)))
+    \! (do
+        (save-shader-state state (state :current-shader))
+        state)
     state))
 
 
@@ -570,7 +609,7 @@
           (q/shader shd))
         (draw-quad state ar)))
     
-    (mtr/capture :t-render (/ (float (- (System/nanoTime) t-render-start)) 1000000000.0))
+    (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     (mtr/capture :fps (q/current-frame-rate))
     (mtr/capture :t-frame (t-delta state))
     
