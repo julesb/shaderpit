@@ -2,6 +2,7 @@
   (:require [quil.core :as q]
             [quil.middleware :as m]
             [shaderpit.metrics :as mtr]
+            [shaderpit.console :as console]
             [clojure.string :as str]
             [clojure.java.io :as io])
   (:use [shaderpit.vector])
@@ -13,6 +14,7 @@
 
 (def gr (atom nil))
 (def ^:dynamic console-font)
+(def ^:dynamic title-font)
 (def tex1 (atom nil))
 (def tex2 (atom nil))
 (def ^:const PI Math/PI)
@@ -24,6 +26,7 @@
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
 
+(def console-size [800 200])
 ; =========================================================================
 
 (def default-shader {
@@ -156,7 +159,7 @@
   (let [basename (shaderdef :name)
         statepath (str "./state/" basename ".state")
         savestate (make-save-state state)]
-    (println "save state: " statepath)
+    (console/writeln (str "save state: " statepath))
     (spit statepath savestate)))
 
 
@@ -166,7 +169,7 @@
     (if (.exists (io/file statepath))
       (let [newstatestr (slurp statepath)
             newstate (read-string newstatestr)]
-        (println "load state: " statepath)
+        (console/writeln (str "load state: " statepath))
         (-> state
             (merge newstate)
             (assoc :ns-prev (ns-time))))
@@ -178,15 +181,15 @@
         newid  (mod (inc id) (count (state :shaders)))
         newshader ((get state :shaders) newid)
         newshader-obj (q/load-shader (get newshader :path)) ]
+    (console/writeln (str "load shader: " (newshader :path)))
     (-> state
         (load-shader-state newshader)
         (assoc :current-shader newshader)
-        (assoc-in [:current-shader :shaderobj] newshader-obj)
-      )
-  ))
+        (assoc-in [:current-shader :shaderobj] newshader-obj))))
 
 
 (defn setup []
+  (console/init console-size)
   (let [shaderlist (load-shader-dir)
         current-shader (first shaderlist)
         shaderobj (q/load-shader (current-shader :path))
@@ -203,9 +206,9 @@
 
     (mtr/init)
     (mtr/init-graphics)
-
     ;(def console-font (q/load-font "data/FreeMono-16.vlw"))
     (def console-font (q/load-font "data/AmericanTypewriter-24.vlw"))
+    (def title-font (q/load-font "data/Courier-Bold-64.vlw"))
     ;(reset! tex1 (q/load-image "testpattern4po6.png"))
     ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
     ;(reset! tex1 (q/load-image "uv_checker_large.png"))
@@ -465,7 +468,9 @@
     \m (do
          (if (state :mousewarp)
            (q/cursor)
-           (q/no-cursor)) 
+           (do
+             (center-cursor)
+             (q/no-cursor)))
          (-> state
              (update-in [:mousewarp] not)))
     \M (do
@@ -496,6 +501,9 @@
 
 
 (defn mouse-dragged [state event]
+  (console/writeln (format "mouse: [%.2f %.2f]"
+                           (/ (float (event :x)) (q/width))
+                           (/ (float (event :y)) (q/height))))
     (-> state
         (assoc :mouse-position [(/ (float (event :x)) (q/width))
                                 (/ (float (event :y)) (q/height))])))
@@ -508,7 +516,7 @@
       (.dispose @gr)
       (reset! gr (q/create-graphics (int (/ (q/width) 2))
                                     (int (/ (q/height) 2))  :p2d))
-      (println (format "resize %sx%s" (.width @gr) (.height @gr)))
+      (console/writeln (format "resize %sx%s" (.width @gr) (.height @gr)))
       (-> state
           (assoc :render-width (int (/ (q/width) 2)))
           (assoc :render-height (int (/ (q/height) 2)))
@@ -517,6 +525,7 @@
 
 
 (defn update [state]
+  (console/update)
   (-> state
       (handle-resize)
       (clock-tick)
@@ -548,9 +557,10 @@
         shadername (get-in state [:current-shader :name] "-")
         pal-off (get-in state [:params :palette_offset] 0.0)
         diff_spec (get-in state [:params :diff-spec] 0.5)
+        title-height 40
         lines [
                ;(str "state: " state)
-               (str "shader: " shadername)
+               ;(str "shader: " shadername)
                (str (format "dim: %dx%d" (state :render-width) (state :render-height)))
                (str (format "fov: %.2f"  fovdeg))
                (str (format "ar: %.2f" ar))
@@ -575,12 +585,15 @@
                ]]
     ;(q/fill 255 255 255 255)
     (q/no-stroke)
+    (q/text-font title-font)
+    (q/text shadername x y)
+    (q/text-font console-font)
     (doseq [i (range (count lines))]
       (q/fill 0 0 0 128)
-      (q/rect (- x 6) (- (+ y (* i line-space)) 20)
+      (q/rect (- x 6) (- (+ title-height y (* i line-space)) 20)
               (+ (q/text-width (lines i)) 12) 26 12)
       (q/fill 255 255 255 192)
-      (q/text (lines i) x (+ y (* i line-space))))))
+      (q/text (lines i) x (+ title-height y (* i line-space))))))
     ;(doseq [i (range (count lines))]
     ;  (q/text (lines i) x (+ y (* i line-space))))))
 
@@ -609,15 +622,17 @@
           (q/shader shd))
         (draw-quad state ar)))
     
-    (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     (mtr/capture :fps (q/current-frame-rate))
     (mtr/capture :t-frame (t-delta state))
-    
     (q/reset-shader)
     (q/image @gr 0 0 (q/width) (q/height))
+    (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     
-    (mtr/draw-all 20 20)
-    (draw-info state 32 (- (q/height) 600))
+    (mtr/draw-all (- (q/width) mtr/width 20) 20)
+    (draw-info state 20 50)
+    (q/fill 255)
+    (q/no-tint)
+    (q/image (console/get-image) 0 (- (q/height) (console-size 1) 10))
   ))
 
 
