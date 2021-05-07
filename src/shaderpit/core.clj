@@ -361,7 +361,8 @@
 
 
 (defn render-start! [state]
-  (center-cursor)
+  (when (= (state :camera-model) :3d)
+    (center-cursor))
   (q/start-loop)
   (when (= (state :camera-model) :3d)
     (q/no-cursor))
@@ -466,9 +467,9 @@
                (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
                (assoc-in [:camera :pos] [0.0 0.0 0.0])))
     \m (do
-         (if (state :mousewarp)
+         (if (state :mousewarp) ; turning mousewarp OFF
            (q/cursor)
-           (do
+           (do                  ; turning mousewarp ON
              (center-cursor)
              (q/no-cursor)))
          (-> state
@@ -477,7 +478,7 @@
          (-> state
              (assoc :camera-model
                     (if (= (state :camera-model) :2d) :3d :2d) )
-              (assoc :mousewarp (= (state :camera-model) :3d))))
+             (assoc :mousewarp (= (state :camera-model) :3d))))
     \` (do 
             (-> state
                 (clock-reset)
@@ -507,6 +508,11 @@
     (-> state
         (assoc :mouse-position [(/ (float (event :x)) (q/width))
                                 (/ (float (event :y)) (q/height))])))
+
+
+(defn mouse-wheel [state r]
+  (console/writeln (format "mousewheel: %s" r))
+  state)
 
 
 (defn handle-resize [state]
@@ -557,13 +563,14 @@
         shadername (get-in state [:current-shader :name] "-")
         pal-off (get-in state [:params :palette_offset] 0.0)
         diff_spec (get-in state [:params :diff-spec] 0.5)
-        title-height 40
+        title-height 50
         lines [
                ;(str "state: " state)
                ;(str "shader: " shadername)
                (str (format "dim: %dx%d" (state :render-width) (state :render-height)))
                (str (format "fov: %.2f"  fovdeg))
                (str (format "ar: %.2f" ar))
+               (str (format "camera: %s" (state :camera-model)))
                (str "pos: " (vec3-format pos))
                (str (format "speed: %.6f" speed))
                (str "vpn: " (vec3-format vpn))
@@ -657,6 +664,7 @@
     :key-released key-released
     :mouse-moved mouse-moved
     :mouse-dragged mouse-dragged
+    :mouse-wheel mouse-wheel
 ;    :mouse-pressed mouse-pressed
 ;    :mouse-released mouse-released
     :middleware [m/fun-mode]
