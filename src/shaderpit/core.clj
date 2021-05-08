@@ -26,7 +26,7 @@
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
 
-(def console-size [800 200])
+(def console-size [500 200])
 ; =========================================================================
 
 (def default-shader {
@@ -242,8 +242,6 @@
 (defn update-uniforms! [state shader] 
   (when state
     (let [mp (get state :mouse-position [0 0])
-          m (vec2-div (get state :mouse-position [0 0])
-                      [(/ 1.0 (q/width)) (/ 1.0 (q/height))])
           ar (state :aspect-ratio)
           cam-pos (get-in state [:camera :pos])
           cam-lookat (get-in state [:camera :lookat])
@@ -253,7 +251,7 @@
       (.set shader "aspect_ratio" (float ar))
       (.set shader "mousex" (float (mp 0)))
       (.set shader "mousey" (float (mp 1)))
-      (.set shader "mouse" (float (m 0)) (float (m 1)))
+      (.set shader "mouse" (float (mp 0)) (float (mp 1)))
       (.set shader "swidth" (float (state :render-width)))
       (.set shader "sheight" (float (state :render-height)))
       (.set shader "resolution" (float (state :render-width))
@@ -295,15 +293,35 @@
         n))))
 
 
+(defn camera-drift [cam t dt]
+  (let [wup [0.0 -1.0 0.0] ; world up
+        vpn (cam :vpn)
+        vpr (vec3-normalize (vec3-cross vpn wup))
+        s (* t 0.1)
+        mag 0.1
+        n1 (* (- (q/noise s) 0.5) 2.0)
+        n2 (* (- (q/noise (+ s 12.34)) 0.5) 2.0)
+        n (vec3-add (vec3-scale wup n1)
+                    (vec3-scale vpr n2))
+        ;n (vec3-scale n mag)
+        acc (vec3-scale n dt) ]
+    (when (= (mod (q/frame-count) 7) 0)
+      (console/writeln (format "n: [%.3f  %.3f  %.3f]" (n 0) (n 1) (n 2))))
+    ;(console/writeln (format "n1: %.4f" n1))
+    (update-in cam [:vel] vec3-add acc)))
+
+
 (defn camera-update [state]
-  (let [cam (state :camera)
+  (let [t (t-now state)
+        dt (t-delta state)
+        cam (state :camera)
+        drift_WIP (camera-drift cam t dt)
         [mx my] (vec2-scale (vec2-sub (get-global-mouse)
                                       [(int (/ (q/screen-width) 2))
                                        (int (/ (q/screen-height) 2))])
                             0.5) ; mouse sensitivity factor
         mx (if (and (state :mousewarp) (q/focused)) mx 0.0)
         my (if (and (state :mousewarp) (q/focused)) my 0.0)
-        dt (t-delta state)
         az-vel  (+ (cam :az-vel) (* mx dt))
         alt-vel (+ (cam :alt-vel) (* my dt))
         dampr (cam :damp-r)
@@ -353,6 +371,7 @@
   (-> state
       (assoc :camera new-cam))))
 
+
 (defn camera-reset [state]
   (-> state
       (assoc :camera initial-camera)
@@ -370,6 +389,7 @@
       (assoc :render-paused? false)
       (assoc :ns-prev (ns-time))
       (assoc-in [:mousewarp] (= (state :camera-model) :3d))))
+
 
 (defn render-pause! [state]
   (q/no-loop)
@@ -506,8 +526,9 @@
                            (/ (float (event :x)) (q/width))
                            (/ (float (event :y)) (q/height))))
     (-> state
-        (assoc :mouse-position [(/ (float (event :x)) (q/width))
-                                (/ (float (event :y)) (q/height))])))
+        (assoc :mouse-position (vec2-sub [(/ (float (event :x)) (q/width))
+                                          (/ (float (event :y)) (q/height))]
+                                         [0.5 0.5]))))
 
 
 (defn mouse-wheel [state r]
@@ -614,6 +635,15 @@
   (q/end-shape))
 
 
+(defn draw-quad-uv01 [state ar]
+  (q/begin-shape :quads)
+    (q/vertex -1 -1  0.0  0.0)
+    (q/vertex  1 -1  1.0  0.0)
+    (q/vertex  1  1  1.0  1.0)
+    (q/vertex -1  1  0.0  1.0)
+  (q/end-shape))
+
+
 (defn draw [state]
   (let [rc [(* (state :render-width) 0.5) (* (state :render-height) 0.5)]
         sc [(* (q/width) 0.5) (* (q/height) 0.5)]
@@ -627,7 +657,9 @@
         (q/scale (sc 0) (sc 1))
         (when (q/loaded? shd)
           (q/shader shd))
-        (draw-quad state ar)))
+        (if (= (state :camera-model) :3d)
+          (draw-quad state ar)
+          (draw-quad-uv01 state ar))))
     
     (mtr/capture :fps (q/current-frame-rate))
     (mtr/capture :t-frame (t-delta state))
