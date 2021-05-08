@@ -1,11 +1,12 @@
 (ns shaderpit.core
   (:require [quil.core :as q]
             [quil.middleware :as m]
+            [jb.vector2 :as v2]
+            [jb.vector3 :as v3]
             [shaderpit.metrics :as mtr]
             [shaderpit.console :as console]
             [clojure.string :as str]
             [clojure.java.io :as io])
-  (:use [shaderpit.vector])
   (:import java.awt.event.KeyEvent
            (java.awt Robot)
            (java.awt MouseInfo)
@@ -296,19 +297,19 @@
 (defn camera-drift [cam t dt]
   (let [wup [0.0 -1.0 0.0] ; world up
         vpn (cam :vpn)
-        vpr (vec3-normalize (vec3-cross vpn wup))
+        vpr (v3/normalize (v3/cross vpn wup))
         s (* t 0.1)
         mag 0.1
         n1 (* (- (q/noise s) 0.5) 2.0)
         n2 (* (- (q/noise (+ s 12.34)) 0.5) 2.0)
-        n (vec3-add (vec3-scale wup n1)
-                    (vec3-scale vpr n2))
-        ;n (vec3-scale n mag)
-        acc (vec3-scale n dt) ]
+        n (v3/add (v3/scale wup n1)
+                  (v3/scale vpr n2))
+        ;n (v3/scale n mag)
+        acc (v3/scale n dt) ]
     (when (= (mod (q/frame-count) 7) 0)
       (console/writeln (format "n: [%.3f  %.3f  %.3f]" (n 0) (n 1) (n 2))))
     ;(console/writeln (format "n1: %.4f" n1))
-    (update-in cam [:vel] vec3-add acc)))
+    (update-in cam [:vel] v3/add acc)))
 
 
 (defn camera-update [state]
@@ -316,10 +317,10 @@
         dt (t-delta state)
         cam (state :camera)
         drift_WIP (camera-drift cam t dt)
-        [mx my] (vec2-scale (vec2-sub (get-global-mouse)
-                                      [(int (/ (q/screen-width) 2))
-                                       (int (/ (q/screen-height) 2))])
-                            0.5) ; mouse sensitivity factor
+        [mx my] (v2/scale (v2/sub (get-global-mouse)
+                                  [(int (/ (q/screen-width) 2))
+                                   (int (/ (q/screen-height) 2))])
+                           0.5) ; mouse sensitivity factor
         mx (if (and (state :mousewarp) (q/focused)) mx 0.0)
         my (if (and (state :mousewarp) (q/focused)) my 0.0)
         az-vel  (+ (cam :az-vel) (* mx dt))
@@ -342,17 +343,17 @@
         ;az (wrap-n az 0.0 TWOPI)
         alt (q/constrain alt (- SMALLPI2) SMALLPI2)
 
-        vpn (vec3-normalize [(* (Math/cos alt) (Math/cos az))
-                             (Math/sin alt)
-                             (* (Math/cos alt) (Math/sin az))])
+        vpn (v3/normalize [(* (Math/cos alt) (Math/cos az))
+                           (Math/sin alt)
+                           (* (Math/cos alt) (Math/sin az))])
 
-        pos (vec3-add (cam :pos)
-                      (vec3-scale (vec3-scale (cam :vel) (- dampm-dt 1.0))
-                                  (/ 1.0 (Math/log dampm))))
+        pos (v3/add (cam :pos)
+                    (v3/scale (v3/scale (cam :vel) (- dampm-dt 1.0))
+                              (/ 1.0 (Math/log dampm))))
 
-        vel (vec3-scale (cam :vel) dampm-dt)
+        vel (v3/scale (cam :vel) dampm-dt)
 
-        lookat (vec3-add pos (vec3-scale vpn 6.0))
+        lookat (v3/add pos (v3/scale vpn 6.0))
 
         new-cam (-> (state :camera)
                     (assoc :az az)
@@ -404,18 +405,18 @@
         pos-old  (cam :pos)
         wup [0.0 -1.0 0.0] ; world up
         vpn (cam :vpn)
-        vpv (vec3-normalize (vec3-cross (cam :vpn) [0.0 -1.0 0.0]))
+        vpv (v3/normalize (v3/cross (cam :vpn) [0.0 -1.0 0.0]))
         vel (cam :vel)
         acc (* (cam :speed) (t-delta state))
         nacc (- acc)
         key-movement-map {
-          \w (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpn acc))))
-          \s (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpn nacc))))
-          \a (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpv acc))))
-          \d (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale vpv nacc))))
-          \e (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup nacc))))
-          \c (fn [s] (assoc-in s [:camera :vel] (vec3-add vel (vec3-scale wup acc))))
-          \x (fn [s] (assoc-in s [:camera :vel] (vec3-scale vel 0.9)))
+          \w (fn [s] (assoc-in s [:camera :vel] (v3/add vel (v3/scale vpn acc))))
+          \s (fn [s] (assoc-in s [:camera :vel] (v3/add vel (v3/scale vpn nacc))))
+          \a (fn [s] (assoc-in s [:camera :vel] (v3/add vel (v3/scale vpv acc))))
+          \d (fn [s] (assoc-in s [:camera :vel] (v3/add vel (v3/scale vpv nacc))))
+          \e (fn [s] (assoc-in s [:camera :vel] (v3/add vel (v3/scale wup nacc))))
+          \c (fn [s] (assoc-in s [:camera :vel] (v3/add vel (v3/scale wup acc))))
+          \x (fn [s] (assoc-in s [:camera :vel] (v3/scale vel 0.9)))
           \1 (fn [s] (update-in s [:camera :speed] #(* % 0.99)))
           \2 (fn [s] (update-in s [:camera :speed] #(/ % 0.99)))
           \- (fn [s] (update-in s [:camera :fov] #(* % 0.99)))
@@ -526,9 +527,9 @@
                            (/ (float (event :x)) (q/width))
                            (/ (float (event :y)) (q/height))))
     (-> state
-        (assoc :mouse-position (vec2-sub [(/ (float (event :x)) (q/width))
-                                          (/ (float (event :y)) (q/height))]
-                                         [0.5 0.5]))))
+        (assoc :mouse-position (v2/sub [(/ (float (event :x)) (q/width))
+                                        (/ (float (event :y)) (q/height))]
+                                       [0.5 0.5]))))
 
 
 (defn mouse-wheel [state r]
@@ -592,9 +593,9 @@
                (str (format "fov: %.2f"  fovdeg))
                (str (format "ar: %.2f" ar))
                (str (format "camera: %s" (state :camera-model)))
-               (str "pos: " (vec3-format pos))
+               (str "pos: " (v3/format pos))
                (str (format "speed: %.6f" speed))
-               (str "vpn: " (vec3-format vpn))
+               (str "vpn: " (v3/format vpn))
                (str (format "az: %.2f" az))
                (str (format "alt: %.2f" alt))
                (str (format "dampm: %.4f" dampm))
