@@ -1,5 +1,6 @@
 (ns shaderpit.console
-  (:require [quil.core :as q]))
+  (:require [quil.core :as q]
+            [clojure.string :as str]))
 
 (def line-buffer (atom ()))
 (def ctx (atom {:width 800
@@ -8,7 +9,9 @@
                 :dirty true}))
 
 (def max-lines 8)
+(def wrap-chars 64)
 (def ^:dynamic font)
+(def ^:const promptstr "=> ")
 
 (defn init [dim]
   ;(def font (q/load-font "data/FreeMono-16.vlw"))
@@ -23,30 +26,31 @@
 
 
 (defn writeln [s]
-  (dosync
-    (swap! ctx assoc :dirty true)
-    (swap! line-buffer conj s)
-    (when (> (count @line-buffer) max-lines)
-      (swap! line-buffer #(take max-lines %)))))
+  (swap! ctx assoc :dirty true)
+  (let [lines (reverse (map (partial apply str)
+                       (partition wrap-chars wrap-chars
+                                  nil (str promptstr s))))]
+    (swap! line-buffer #(->> % (concat lines) (take max-lines )))))
 
 
 (defn render []
   (q/with-graphics (@ctx :gr)
     (q/text-font font)
     (q/background 0 0 0 64)
-    (let [x 4 y 20
+    (let [x 10 y 20
           line-space 25
-          lines (vec @line-buffer)]
-      (q/fill 255)
+          lines (vec @line-buffer)
+          maxlineidx (dec (count lines))
+          ;highlight (fn [i, line] (if (= i maxlineidx) 255 160)) 
+          ]
       (doseq [i (range (count lines))]
         (let [idx (- (dec (count lines)) i)
               fade (Math/sqrt (double (/ idx max-lines)))
-              alpha (- 255 (int (* 255.0 fade)))]
-
-          ;(q/fill 255 255 255 alpha)
-          (q/text (format "[%d] %s" alpha (lines idx))
-                  x (+ y (* i line-space)))))
-          ;(q/text (lines idx) x (+ y (* i line-space)))))
+              alpha (if (= i maxlineidx) 255 160)
+              ;alpha (- 255 (int (* 255.0 fade)))
+              ]
+          (q/fill 255 255 255 alpha)
+          (q/text (lines idx) x (+ y (* i line-space)))))
       (when (= lines @line-buffer)
         (swap! ctx assoc :dirty false)))))
 
