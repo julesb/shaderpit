@@ -170,10 +170,7 @@
 
 (defn format [v]
   (if (and (not= nil v) (>= (count v) 3))
-    (str "[" (clojure.core/format "%.2f" (v 0))
-         " " (clojure.core/format "%.2f" (v 1))
-         " " (clojure.core/format "%.2f" (v 2))
-         "]")
+    (clojure.core/format "[%.2f %.2f %.2f]" (v 0) (v 1) (v 2))
     ""))
 
 ;; p=point, pv=point on plane, pn=plane normal
