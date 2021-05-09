@@ -34,7 +34,7 @@
 
 
 (defn init-graphics []
-  (def title-font (q/load-font "data/FreeMono-16.vlw"))
+  (def title-font (q/load-font "data/app/fonts/FreeMono-16.vlw"))
   (doseq [k (keys @metrics)]
     (swap! metrics assoc-in [k :g] (q/create-graphics width height :p2d))
   
