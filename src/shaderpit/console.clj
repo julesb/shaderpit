@@ -15,7 +15,7 @@
 
 (defn init [dim]
   ;(def font (q/load-font "data/FreeMono-16.vlw"))
-  (def font (q/load-font "data/AmericanTypewriter-24.vlw"))
+  (def font (q/load-font "data/app/fonts/AmericanTypewriter-24.vlw"))
   (when (@ctx :gr)
     (.dispose (@ctx :gr)))
   (reset! ctx {:gr (q/create-graphics (dim 0) (dim  1) :p2d)
@@ -28,8 +28,7 @@
 (defn writeln [s]
   (swap! ctx assoc :dirty true)
   (let [lines (reverse (map (partial apply str)
-                       (partition wrap-chars wrap-chars
-                                  nil (str promptstr s))))]
+                            (partition-all wrap-chars (str promptstr s))))]
     (swap! line-buffer #(->> % (concat lines) (take max-lines )))))
 
 
