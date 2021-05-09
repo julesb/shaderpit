@@ -554,7 +554,7 @@
 
 
 (defn state-update [state]
-  (console/update)
+  (console/update!)
   (-> state
       (handle-resize)
       (clock-tick)

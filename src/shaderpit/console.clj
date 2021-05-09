@@ -54,7 +54,7 @@
         (swap! ctx assoc :dirty false)))))
 
 
-(defn update []
+(defn update! []
   (when (@ctx :dirty)
     (render)))
 
