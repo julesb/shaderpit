@@ -1,4 +1,5 @@
-(ns jb.vector2)
+(ns jb.vector2
+  (:refer-clojure :exclude [format]))
 
 ; 2d vector ops
 (defn angle-to-vec2 [angle]
@@ -48,6 +49,11 @@
        (= (v2 1) (v2 1))))
 
 
+
+(defn format [v]
+  (if (and (not= nil v) (>= (count v) 2))
+    (clojure.core/format "[%.2f %.2f]" (v 0) (v 1))
+    ""))
 
 ; http://paulbourke.net/geometry/lineline2d/"
 
