@@ -27,7 +27,7 @@
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
 
-(def console-size [500 200])
+(def console-size [780 200])
 ; =========================================================================
 
 (def default-shader {
@@ -306,9 +306,8 @@
                   (v3/scale vpr n2))
         ;n (v3/scale n mag)
         acc (v3/scale n dt) ]
-    (when (= (mod (q/frame-count) 7) 0)
-      (console/writeln (format "n: [%.3f  %.3f  %.3f]" (n 0) (n 1) (n 2))))
-    ;(console/writeln (format "n1: %.4f" n1))
+    ;(when (= (mod (q/frame-count) 15) 0)
+    ;  (console/writeln (format "n: [%.3f  %.3f  %.3f]" (n 0) (n 1) (n 2))))
     (update-in cam [:vel] v3/add acc)))
 
 
@@ -458,6 +457,10 @@
 
 
 (defn key-pressed [state event]
+  (console/writeln (str "key: " event))
+  (when (= 27 (q/key-code))
+    ; dont exit
+    (set! (.key (quil.applet/current-applet)) (char 0)))
   (let [the-raw-key (event :raw-key)
         the-key-code (event :key-code)
         coded? (= processing.core.PConstants/CODED (int the-raw-key))
@@ -523,13 +526,11 @@
 
 
 (defn mouse-dragged [state event]
-  (console/writeln (format "mouse: [%.2f %.2f]"
-                           (/ (float (event :x)) (q/width))
-                           (/ (float (event :y)) (q/height))))
+  (let [p [(/ (float (event :x)) (q/width))
+           (/ (float (event :y)) (q/height))]]
+    (console/writeln (format "mouse: %s" (v2/format p)))
     (-> state
-        (assoc :mouse-position (v2/sub [(/ (float (event :x)) (q/width))
-                                        (/ (float (event :y)) (q/height))]
-                                       [0.5 0.5]))))
+        (assoc :mouse-position p))))
 
 
 (defn mouse-wheel [state r]
@@ -552,7 +553,7 @@
     state))
 
 
-(defn update [state]
+(defn state-update [state]
   (console/update)
   (-> state
       (handle-resize)
@@ -692,7 +693,7 @@
     :renderer :p2d
     ;:renderer :opengl
     :key-typed key-typed
-    :update update
+    :update state-update
     :key-pressed key-pressed
     :key-released key-released
     :mouse-moved mouse-moved
