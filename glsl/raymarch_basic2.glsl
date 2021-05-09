@@ -1,6 +1,6 @@
 #define MAX_STEPS 200
 #define MAX_DIST 100.
-#define SURF_DIST .001
+#define SURF_DIST .0001
 #define PI 3.141592653
 
 uniform float time;
@@ -37,6 +37,18 @@ mat2 rot2(float a) {
     return mat2(c, -s, s, c);
 }
 
+vec3 op_rep(vec3 p, vec3 spread) {
+    return mod(p+spread*0.5, spread) - spread*0.5;
+}
+
+vec2 op_intersect(vec2 a, vec2 b) {
+    float d = max(a.x, b.x);
+    if (d <= b.x)
+        return vec2(d,b.y);
+    else
+        return vec2(d,a.y);
+}
+
 float sdBox(vec3 p, vec3 s) {
     p = abs(p)-s;
 	return length(max(p, 0.))+min(max(p.x, max(p.y, p.z)), 0.);
@@ -47,9 +59,12 @@ float sdSphere(vec3 p, float r) {
 }
 
 float scene(vec3 p) {
-    float box = sdBox(p - vec3(3., 1., 0.), vec3(1));
-    float sphere = sdSphere(p - vec3(0., 1., 0.), 1.);
-    float objects = min(box, sphere);
+    //p = fract(p);
+    vec3 prep = op_rep(p, vec3(5., 5., 5.));
+    float box = sdBox(prep - vec3(0., 0., 0.), vec3(1));
+    float sphere = sdSphere(prep - vec3(0., 0., 0.), 1.5);
+    float objects = max(box*1.0, sphere*1.0);
+    //float objects = min(box, sphere);
     float plane = p.y;
     return min(objects, plane);
 }
@@ -115,7 +130,7 @@ void main(void)
         vec3 n = getnormal(p) * 0.5;
         
         col = abs(n);
-        glow *= col;
+        //glow *= col;
 
         float diffuse = dot(n, normalize(vec3(1,2,3)))*.5+.5;
         col *= vec3(diffuse * 1.);
@@ -128,7 +143,7 @@ void main(void)
         //col = vec3(.2, .3, .7);
     }
     
-    col += glow;
+    //col += glow;
 
     //col = texture2D(tex1, vertTexCoord.st).rgb;
     col = pow(col, vec3(gamma));	// gamma correction

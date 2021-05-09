@@ -623,7 +623,7 @@ void main(void) {
         //fc = iqfog(fc, cam_dist, normalize(cam_pos-p), normalize(p-lightpos));
         
         // vignette
-        fc *= 1. - dot(vPos, vPos);
+        fc *= 1. - dot(vPos/aspect_ratio, vPos);
         
         fc = pow(fc, vec3(gamma));
         gl_FragColor = vec4(fc, 1.0);
