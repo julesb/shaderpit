@@ -8,21 +8,11 @@
                 :gr nil
                 :dirty true}))
 
+(def size [920 200])
 (def max-lines 8)
-(def wrap-chars 64)
+(def wrap-chars 80)
 (def ^:dynamic font)
 (def ^:const promptstr "=> ")
-
-(defn init [dim]
-  ;(def font (q/load-font "data/FreeMono-16.vlw"))
-  (def font (q/load-font "data/app/fonts/AmericanTypewriter-24.vlw"))
-  (when (@ctx :gr)
-    (.dispose (@ctx :gr)))
-  (reset! ctx {:gr (q/create-graphics (dim 0) (dim  1) :p2d)
-               :dirty true
-               :width (dim 0)
-               :height (dim 1)})
-  (reset! line-buffer ()))
 
 
 (defn writeln [s]
@@ -30,6 +20,12 @@
   (let [lines (reverse (map (partial apply str)
                             (partition-all wrap-chars (str promptstr s))))]
     (swap! line-buffer #(->> % (concat lines) (take max-lines )))))
+
+
+(defn writeseq [ss]
+  (when (> (count ss) 0)
+    (doseq [s ss]
+      (writeln s))))
 
 
 (defn render []
@@ -52,6 +48,19 @@
           (q/text (lines idx) x (+ y (* i line-space)))))
       (when (= lines @line-buffer)
         (swap! ctx assoc :dirty false)))))
+
+
+(defn init []
+  (def font (q/load-font "data/app/fonts/AmericanTypewriter-24.vlw"))
+  (when (@ctx :gr)
+    (.dispose (@ctx :gr)))
+  (reset! ctx {:gr (q/create-graphics (size 0) (size 1) :p2d)
+               :dirty true
+               :width (size 0)
+               :height (size 1)})
+  (reset! line-buffer ())
+  (render))
+
 
 
 (defn update! []

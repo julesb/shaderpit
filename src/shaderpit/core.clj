@@ -5,6 +5,8 @@
             [jb.vector3 :as v3]
             [shaderpit.metrics :as mtr]
             [shaderpit.console :as console]
+            [shaderpit.util :as util]
+            [shaderpit.transport :as t]
             [clojure.string :as str]
             [clojure.java.io :as io])
   (:import java.awt.event.KeyEvent
@@ -27,16 +29,8 @@
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
 
-(def console-size [780 200])
-; =========================================================================
 
-(def default-shader {
-  :id 0
-  :name "Unnamed"
-  :path ""
-  :type :fragment
-  :shaderobj nil
-  })
+; =========================================================================
 
 (def initial-camera {
   :pos [5.0 1.0 0.0]
@@ -117,38 +111,6 @@
                     (int (/ (q/screen-height) 2))))
 
 
-(defn define-shader
-  [& {:keys [id name path type]
-      :or {id (default-shader :id)
-           name (default-shader :path) ; name=path
-           path (default-shader :path)
-           type (default-shader :type) } }]
-  (-> default-shader
-      (assoc :id id)
-      (assoc :name name)
-      (assoc :path path)
-      (assoc :type type) ))
-
-
-(defn glsl-file-list []
-  (->> (seq (.list (clojure.java.io/file "./glsl")))
-       (filter #(re-matches #".+\.glsl$" %))))
-
-
-(defn shader-basename [shaderpath]
-  (-> shaderpath
-      (str/replace #"^\./glsl/" "")
-      (str/replace #"\.glsl$" "")))
-
-
-(defn load-shader-dir []
-  (into []
-    (map-indexed #(define-shader :id %1
-                                 :path (str "./glsl/" %2)
-                                 :name (shader-basename %2))
-                 (glsl-file-list))))
-
-
 (defn make-save-state [state]
   (-> state
       (dissoc :aspect-ratio :keys-down :ns-delta :ns-prev
@@ -190,8 +152,8 @@
 
 
 (defn setup []
-  (console/init console-size)
-  (let [shaderlist (load-shader-dir)
+  (console/init)
+  (let [shaderlist (util/load-shader-dir)
         current-shader (first shaderlist)
         shaderobj (q/load-shader (current-shader :path))
         render-width (int (/ (q/width) 2))
@@ -207,6 +169,7 @@
 
     (mtr/init)
     (mtr/init-graphics)
+    (t/init)
     ;(def console-font (q/load-font "data/FreeMono-16.vlw"))
     (def console-font (q/load-font "data/app/fonts/AmericanTypewriter-24.vlw"))
     (def title-font (q/load-font "data/app/fonts/Courier-Bold-64.vlw"))
@@ -457,7 +420,7 @@
 
 
 (defn key-pressed [state event]
-  (console/writeln (str "key: " event))
+  ;(console/writeln (str "key: " event))
   (when (= 27 (q/key-code))
     ; dont exit
     (set! (.key (quil.applet/current-applet)) (char 0)))
@@ -515,6 +478,12 @@
     \! (do
         (save-shader-state state (state :current-shader))
         state)
+    \P (do
+         (t/on-record state)
+         state)
+    \p (do
+         (t/on-play-pause)
+         state)
     state))
 
 
@@ -527,8 +496,9 @@
 
 (defn mouse-dragged [state event]
   (let [p [(/ (float (event :x)) (q/width))
-           (/ (float (event :y)) (q/height))]]
-    (console/writeln (format "mouse: %s" (v2/format p)))
+           (/ (float (event :y)) (q/height))]
+        p [(p 0) (- 1.0 (p 1))]]
+    ;(console/writeln (format "mouse: %s" (v2/format p)))
     (-> state
         (assoc :mouse-position p))))
 
@@ -555,13 +525,19 @@
 
 (defn state-update [state]
   (console/update!)
-  (-> state
-      (handle-resize)
-      (clock-tick)
-      (do-movement-keys)
-      (camera-update)
-      (update-uniforms! (get-in state [:current-shader :shaderobj]))
-  ))
+  (if (t/playing?)
+    (-> state
+        (handle-resize)
+        (t/current-frame)
+        (update-uniforms! (get-in state [:current-shader :shaderobj])))
+    (-> state
+        (handle-resize)
+        (clock-tick)
+        (do-movement-keys)
+        (camera-update)
+        (update-uniforms! (get-in state [:current-shader :shaderobj]))
+        (t/capture-frame)
+    )))
 
 
 (defn draw-info [state x y]
@@ -639,10 +615,10 @@
 
 (defn draw-quad-uv01 [state ar]
   (q/begin-shape :quads)
-    (q/vertex -1 -1  0.0  0.0)
-    (q/vertex  1 -1  1.0  0.0)
-    (q/vertex  1  1  1.0  1.0)
-    (q/vertex -1  1  0.0  1.0)
+    (q/vertex -1 -1  0.0  1.0)
+    (q/vertex  1 -1  1.0  1.0)
+    (q/vertex  1  1  1.0  0.0)
+    (q/vertex -1  1  0.0  0.0)
   (q/end-shape))
 
 
@@ -673,7 +649,7 @@
     (draw-info state 20 50)
     (q/fill 255)
     (q/no-tint)
-    (q/image (console/get-image) 0 (- (q/height) (console-size 1) 10))
+    (q/image (console/get-image) 0 (- (q/height) (console/size 1) 10))
   ))
 
 
