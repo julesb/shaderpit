@@ -45,6 +45,7 @@
   :speed 1.0
   :damp-r 0.0005
   :damp-m 0.5
+  :zoom 1.0
 })
 
 (def initial-params {
@@ -146,6 +147,7 @@
         newshader-obj (q/load-shader (get newshader :path)) ]
     (console/writeln (str "load shader: " (newshader :path)))
     (-> state
+        (assoc :camera initial-camera)
         (load-shader-state newshader)
         (assoc :current-shader newshader)
         (assoc-in [:current-shader :shaderobj] newshader-obj))))
@@ -202,6 +204,16 @@
          )
   ))
 
+; TODO
+;(defn new-state []
+;  (-> initial-state
+;      (assoc :render-width render-width)
+;      (assoc :render-height render-height)
+;      (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
+;      (assoc :shaders shaderlist)
+;      (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
+;      (clock-reset)))
+
 
 (defn update-uniforms! [state shader] 
   (when state
@@ -235,6 +247,7 @@
       (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
       (.set shader "time" (float (t-now state)))
       (.set shader "tex1" @tex1)
+      (.set shader "zoom" (float (get-in state [:camera :zoom] 1.0)))
       ;(.set shader "time" (float (/ (q/millis) 1000.0)))
 
       )
@@ -483,7 +496,9 @@
          state)
     \p (do
          (t/on-play-pause)
-         state)
+         (if (t/playing?)
+           (update state :mousewarp :false)
+           (update state :mousewarp :true)))
     state))
 
 
@@ -505,7 +520,8 @@
 
 (defn mouse-wheel [state r]
   (console/writeln (format "mousewheel: %s" r))
-  state)
+  (update-in state [:camera :zoom] #(+ % (* r 0.1)))
+  )
 
 
 (defn handle-resize [state]
@@ -591,6 +607,7 @@
                ]]
     ;(q/fill 255 255 255 255)
     (q/no-stroke)
+    (q/fill 255 255 255 192)
     (q/text-font title-font)
     (q/text shadername x y)
     (q/text-font console-font)
@@ -628,6 +645,7 @@
         shd (get-in state [:current-shader :shaderobj])
         ar (get state :aspect-ratio 1.0)
         t-render-start (System/nanoTime)
+        t (t-now state)
         ]
     (q/with-graphics @gr
       (q/texture-wrap :repeat)
@@ -646,6 +664,7 @@
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     
     (mtr/draw-all (- (q/width) mtr/width 20) 20)
+    (t/draw-ui (- (q/width) 300) 600, t)
     (draw-info state 20 50)
     (q/fill 255)
     (q/no-tint)

@@ -80,3 +80,5 @@
             succ (inc ord)]
         (format "%s_%04d.capture" basename succ)))))
 
+(defn fract [f]
+  (- f (Math/floor f)))

@@ -29,6 +29,9 @@
                 :gr nil
                 :dirty true}))
 
+(defn get-transport []
+  (update @transport :current-recording dissoc :frames))
+
 
 (defn clean-state [state]
   (-> state
@@ -40,11 +43,12 @@
 (defn save []
   (let [basename (get-in @transport [:current-recording :name])
         path (str "./capture/" (util/get-successor-filename basename))]
-    (console/writeln (str "recorder: WRITE " path))
+    (console/writeln (str "transport: WRITE " path))
     (spit path (@transport :current-recording))))
 
 
 (defn init []
+  (def ui-font (q/load-font "data/app/fonts/AmericanTypewriter-24.vlw"))
   (reset! transport initial-transport)
  (console/writeln (str "transport: INIT: " @transport)))
 
@@ -85,7 +89,7 @@
  
 
 (defn stop []
-  (swap! transport assoc :status :ready)
+  (swap! transport assoc :status :idle)
   (console/writeln "transport: STOP") )
 
 
@@ -112,6 +116,22 @@
       (play))))
 
 
+(defn max-frame-idx []
+  (dec (frame-count)))
+
+
+(defn check-loop []
+  (when (= (@transport :current-frame-idx) (max-frame-idx))
+    (cond
+      (= (@transport :loop-mode) :none)
+        (stop)
+      (= (@transport :loop-mode) :one)
+      1 ; TODO
+      (= (@transport :loop-mode) :all)
+      1; TODO
+    )
+  ))
+
 (defn capture-frame [state]
   (when (recording?)
     (swap! transport update-in [:current-recording :frames]
@@ -128,6 +148,7 @@
       (do
         (swap! transport update :current-frame-idx
                #(int (mod (inc %) nframes)))
+        (check-loop)
         (merge state (assoc (frames fidx) :current-shader shader)))
       state)))
 
@@ -142,7 +163,43 @@
 ;  ))
 ;
 ;
-;(defn draw-ui [x y]
-; 
-;  )
+(defn draw-rec-icon [x y t]
+  (let [blink-rate 2.0
+        t (util/fract (* t blink-rate))
+        alpha (* 255 (Math/pow (+ t 1.0) -4.0))]
+    (q/no-stroke)
+    (q/fill 255 0 0 alpha)
+    (q/ellipse x y 30 30)
+    )
+
+  )
+
+(defn draw-info [x y t]
+  (q/text-font ui-font)
+    (let [line-space 30
+          cur-frame-idx (@transport :current-frame-idx)
+          nframes (count (get-in @transport [:current-recording :frames]))
+          name (get-in @transport [:current-recording :name])
+          loopmode (@transport :loop-mode)
+          status (@transport :status)
+          lines [
+            (str "name: " name)
+            (str "frame: " cur-frame-idx " / " nframes)
+            (str "status: " status)
+            (str "loop: " loopmode)
+            ]
+          ]
+      (doseq [i (range (count lines))]
+        (q/fill 0 0 0 128)
+        (q/rect (- x 6) (- (+ y (* i line-space)) 20)
+                (+ (q/text-width (lines i)) 12) 26 12)
+        (q/fill 255 255 255 192)
+        (q/text (lines i) x (+ y (* i line-space))))))
+
+
+(defn draw-ui [x y t]
+  (draw-info x y t)
+  (draw-rec-icon (- (q/width) 50) (- (q/height) 50) t)
+  )
+
 ;
