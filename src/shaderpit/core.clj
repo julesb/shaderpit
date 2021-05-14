@@ -32,79 +32,7 @@
 
 ; =========================================================================
 
-(def initial-camera {
-  :pos [5.0 1.0 0.0]
-  :az 0.0
-  :alt 0.0
-  :az-vel 0.0
-  :alt-vel 0.0
-  :lookat [0.0 0.0 0.0]
-  :vpn [0.0 0.0 -1.0]
-  :fov (/ Math/PI 3.0)
-  :vel [0.0 0.0 0.0]
-  :speed 1.0
-  :damp-r 0.0005
-  :damp-m 0.5
-  :zoom 1.0
-})
 
-(def initial-params {
-  :blend_coef 10.0
-  :ray_hit_epsilon 0.001
-  :palette_offset 0.0
-  :gamma 0.55
-  :glow-intensity 0.0
-  :diff-spec 0.5
-})
-
-(def initial-state {
-  :keys-down #{}
-  :mouse-position [0 0]
-  ;:mouse-delta [0 0]
-  :mousewarp true
-  :render-width 0
-  :render-height 0
-  :aspect-ratio 1.0
-  :camera-model :3d ; :3d = 3d first person, :2d = 2d pan and zoom
-  :pixel-scale (int 2)
-  :render-paused? false
-  :camera initial-camera
-  :params initial-params
-  :shaders {}
-  :current-shader nil
-  :ns-now 0
-  :ns-delta 0
-  :ns-prev 0
-})
-
-
-
-(defn ns-time []
-  (System/nanoTime))
-
-
-(defn clock-reset [state]
-  (-> state
-      (assoc :ns-prev (ns-time))
-      (assoc :ns-now 0)
-      (assoc :ns-delta 0)))
-
-
-(defn clock-tick [state]
-  (let [ns-now (ns-time)
-        ns-delta (- ns-now (state :ns-prev))]
-    (-> state
-        (assoc :ns-prev ns-now)
-        (update-in [:ns-now] + ns-delta)
-        (assoc :ns-delta ns-delta))))
-
-
-(defn t-delta [state]
-  (double (/ (state :ns-delta) 1000000000)))
-
-
-(defn t-now [state]
-  (double (/ (state :ns-now) 1000000000)))
 
 
 (defn center-cursor []
@@ -127,46 +55,14 @@
     (spit statepath savestate)))
 
 
-(defn load-shader-state [state shaderdef]
-  (let [basename (shaderdef :name)
-        statepath (str "./state/" basename ".state")]
-    (if (.exists (io/file statepath))
-      (let [newstatestr (slurp statepath)
-            newstate (read-string newstatestr)]
-        (console/writeln (str "load state: " statepath))
-        (-> state
-            (merge newstate)
-            (assoc :ns-prev (ns-time))))
-      state)))
-
 
 (defn next-shader [state]
-  (let [id (get-in state [:current-shader :id])
-        newid  (mod (inc id) (count (state :shaders)))
-        newshader ((get state :shaders) newid)
-        newshader-obj (q/load-shader (get newshader :path)) ]
-    (console/writeln (str "load shader: " (newshader :path)))
-    (-> state
-        (assoc :camera initial-camera)
-        (load-shader-state newshader)
-        (assoc :current-shader newshader)
-        (assoc-in [:current-shader :shaderobj] newshader-obj))))
-
-
-; TODO
-(defn new-state []
-  (let [shaderlist (util/load-shader-dir)
-        current-shader (first shaderlist)
-        shaderobj (q/load-shader (current-shader :path))
-        render-width (int (/ (q/width) 2))
-        render-height (int (/ (q/height) 2))]
-    (-> initial-state
-        (assoc :render-width render-width)
-        (assoc :render-height render-height)
-        (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
-        (assoc :shaders shaderlist)
-        (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
-        (clock-reset))))
+  (console/writeln (str "NEXT"))
+  (let [newidx  (mod (inc (state :current-shader-idx))
+                     (count (state :shaders)))
+        nextshader ((get state :shaders) newidx) ]
+    (-> (util/init-with-shaderdef nextshader)
+        (assoc :current-shader-idx newidx))))
 
 
 (defn setup []
@@ -198,9 +94,9 @@
   ;(reset! tex1 (q/load-image "cubesphere.jpg"))
   ;(reset! tex1 (q/load-image "stereographic.jpg"))
   ;(reset! tex1 (q/load-image "sphere_map_floor_gradient.jpg"))
-  
-  (new-state)
-  )
+  (let [shaderlist (util/load-shader-dir)]
+    (util/init-with-shaderdef (first shaderlist))
+  ))
 
 
 
@@ -234,7 +130,7 @@
       (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
       (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
       (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
-      (.set shader "time" (float (t-now state)))
+      (.set shader "time" (float (util/t-now state)))
       (.set shader "tex1" @tex1)
       (.set shader "zoom" (float (get-in state [:camera :zoom] 1.0)))
       ;(.set shader "time" (float (/ (q/millis) 1000.0)))
@@ -277,8 +173,8 @@
 
 
 (defn camera-update [state]
-  (let [t (t-now state)
-        dt (t-delta state)
+  (let [t (util/t-now state)
+        dt (util/t-delta state)
         cam (state :camera)
         drift_WIP (camera-drift cam t dt)
         [mx my] (v2/scale (v2/sub (get-global-mouse)
@@ -339,7 +235,7 @@
 
 (defn camera-reset [state]
   (-> state
-      (assoc :camera initial-camera)
+      (assoc :camera util/initial-camera)
       (assoc :aspect-ratio (/ (float (q/width)) (q/height))))
   )
 
@@ -352,7 +248,7 @@
     (q/no-cursor))
     (-> state
       (assoc :render-paused? false)
-      (assoc :ns-prev (ns-time))
+      (assoc :ns-prev (util/ns-time))
       (assoc-in [:mousewarp] (= (state :camera-model) :3d))))
 
 
@@ -371,7 +267,7 @@
         vpn (cam :vpn)
         vpv (v3/normalize (v3/cross (cam :vpn) [0.0 -1.0 0.0]))
         vel (cam :vel)
-        acc (* (cam :speed) (t-delta state))
+        acc (* (cam :speed) (util/t-delta state))
         nacc (- acc)
         key-movement-map {
           \w (fn [s] (assoc-in s [:camera :vel] (v3/add vel (v3/scale vpn acc))))
@@ -470,13 +366,13 @@
              (assoc :mousewarp (= (state :camera-model) :3d))))
     \` (do 
             (-> state
-                (clock-reset)
+                (util/clock-reset)
                 (assoc-in [:current-shader :shaderobj]
                           (q/load-shader (get-in state [:current-shader :path])))))
     \/ (do
-            (-> state
-                ;(clock-reset)
-                (next-shader)))
+         (if (t/recording?)
+           state
+           (next-shader state)))
     \! (do
         (save-shader-state state (state :current-shader))
         state)
@@ -509,9 +405,9 @@
 
 (defn mouse-wheel [state r]
   (console/writeln (format "mousewheel: %s" r))
-  (when (= (state :camera-model) :2d)
-    (update-in state [:camera :zoom] #(+ % (* r 0.1))))
-  )
+  (if (= (state :camera-model) :2d)
+    (update-in state [:camera :zoom] #(+ % (* r 0.1)))
+    state))
 
 
 (defn handle-resize [state]
@@ -538,7 +434,7 @@
         (update-uniforms! (get-in state [:current-shader :shaderobj])))
     (-> state
         (handle-resize)
-        (clock-tick)
+        (util/clock-tick)
         (do-movement-keys)
         (camera-update)
         (update-uniforms! (get-in state [:current-shader :shaderobj]))
@@ -591,8 +487,8 @@
                (str (format "pal: %.2f" pal-off))
                (str (format "d/s: %.2f" diff_spec))
                ;(str "camera: " (state :camera))
-               (str (format "time %.2f" (t-now state)))
-               (str (format "dt %.5f" (t-delta state)))
+               (str (format "time %.2f" (util/t-now state)))
+               (str (format "dt %.5f" (util/t-delta state)))
                (str (format "fps: %.2f" (float (q/current-frame-rate))))
                ]]
     ;(q/fill 255 255 255 255)
@@ -635,20 +531,21 @@
         shd (get-in state [:current-shader :shaderobj])
         ar (get state :aspect-ratio 1.0)
         t-render-start (System/nanoTime)
-        t (t-now state)
+        t (util/t-now state)
         ]
     (q/with-graphics @gr
       (q/texture-wrap :repeat)
       (q/with-translation rc
         (q/scale (sc 0) (sc 1))
-        (when (q/loaded? shd)
-          (q/shader shd))
+        ;(when (q/loaded? shd)
+          (q/shader shd)
+          ;)
         (if (= (state :camera-model) :3d)
           (draw-quad state ar)
           (draw-quad-uv01 state ar))))
     
     (mtr/capture :fps (q/current-frame-rate))
-    (mtr/capture :t-frame (t-delta state))
+    (mtr/capture :t-frame (util/t-delta state))
     (q/reset-shader)
     (q/image @gr 0 0 (q/width) (q/height))
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))

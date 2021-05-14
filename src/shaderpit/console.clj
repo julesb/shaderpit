@@ -16,6 +16,7 @@
 
 
 (defn writeln [s]
+  (println promptstr s)
   (swap! ctx assoc :dirty true)
   (let [lines (reverse (map (partial apply str)
                             (partition-all wrap-chars (str promptstr s))))]

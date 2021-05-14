@@ -127,7 +127,7 @@
         (stop)
       (= (@transport :loop-mode) :one)
         (do
-          (reset! transport :current-frame-idx 0)
+          (swap! transport assoc :current-frame-idx 0)
           nil)
       (= (@transport :loop-mode) :all)
       1; TODO
