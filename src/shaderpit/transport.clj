@@ -15,7 +15,7 @@
   :current-recording nil
   :current-time 0
   :current-frame-idx 0
-  :loop-mode :none ; :none :one :all
+  :loop-mode :one ; :none :one :all
 })
 
 (def new-recording {
@@ -126,11 +126,14 @@
       (= (@transport :loop-mode) :none)
         (stop)
       (= (@transport :loop-mode) :one)
-      1 ; TODO
+        (do
+          (reset! transport :current-frame-idx 0)
+          nil)
       (= (@transport :loop-mode) :all)
       1; TODO
     )
   ))
+
 
 (defn capture-frame [state]
   (when (recording?)
@@ -138,6 +141,7 @@
                                conj (clean-state state)))
   state)
   
+
 
 (defn current-frame [state]
   (let [frames (get-in @transport [:current-recording :frames])

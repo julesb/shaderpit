@@ -153,66 +153,55 @@
         (assoc-in [:current-shader :shaderobj] newshader-obj))))
 
 
-(defn setup []
-  (console/init)
+; TODO
+(defn new-state []
   (let [shaderlist (util/load-shader-dir)
         current-shader (first shaderlist)
         shaderobj (q/load-shader (current-shader :path))
         render-width (int (/ (q/width) 2))
         render-height (int (/ (q/height) 2))]
-    ;(q/smooth)
-    (q/no-cursor)
-    (q/texture-mode :normal)
-    (q/texture-wrap :repeat)
-    (q/noise-detail 2)
-    (q/hint :disable-depth-test)
-    (q/frame-rate 60)
-    (reset! gr (q/create-graphics render-width render-height :p2d))
-
-    (mtr/init)
-    (mtr/init-graphics)
-    (t/init)
-    ;(def console-font (q/load-font "data/FreeMono-16.vlw"))
-    (def console-font (q/load-font "data/app/fonts/AmericanTypewriter-24.vlw"))
-    (def title-font (q/load-font "data/app/fonts/Courier-Bold-64.vlw"))
-    ;(reset! tex1 (q/load-image "testpattern4po6.png"))
-    ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
-    ;(reset! tex1 (q/load-image "uv_checker_large.png"))
-    ;(reset! tex1 (q/load-image "Sky02.jpg"))
-    ;(reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
-    ;(reset! tex1 (q/load-image "North_South_Panorama_Equirect_360x180.jpg"))
-    ;(reset! tex1 (q/load-image "QueensPark.m.jpg"))
-    ;(reset! tex1 (q/load-image "beach-hdr-blur128.jpg"))
-    (reset! tex1 (q/load-image "sphericalsky-b.jpg"))
-    ;(reset! tex1 (q/load-image "cube-grid.png"))
-    ;(reset! tex1 (q/load-image "cubesphere.jpg"))
-    ;(reset! tex1 (q/load-image "stereographic.jpg"))
-    ;(reset! tex1 (q/load-image "sphere_map_floor_gradient.jpg"))
-    ;(reset! tex1 (q/load-image "cave_texture_01-512x512.png"))
-    ;(reset! tex1 (q/load-image "seamless-black-wall-texture-decorating-inspiration-1.jpg"))
-    ;(reset! tex1 (q/load-image "beach-hdr.jpg"))
-    ;(reset! tex1 (q/load-image "studio010.jpg"))
-    
-    ;(reset! texture-shader (load-shader "data/texfrag.glsl" "data/texvert.glsl"))
     (-> initial-state
-         (assoc :render-width render-width)
-         (assoc :render-height render-height)
-         (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
-         (assoc :shaders shaderlist)
-         (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
-         (clock-reset)
-         )
-  ))
+        (assoc :render-width render-width)
+        (assoc :render-height render-height)
+        (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
+        (assoc :shaders shaderlist)
+        (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
+        (clock-reset))))
 
-; TODO
-;(defn new-state []
-;  (-> initial-state
-;      (assoc :render-width render-width)
-;      (assoc :render-height render-height)
-;      (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
-;      (assoc :shaders shaderlist)
-;      (assoc :current-shader (assoc current-shader :shaderobj shaderobj))
-;      (clock-reset)))
+
+(defn setup []
+  (console/init)
+  ;(q/smooth)
+  (q/no-cursor)
+  (q/texture-mode :normal)
+  (q/texture-wrap :repeat)
+  (q/noise-detail 2)
+  (q/hint :disable-depth-test)
+  (q/frame-rate 60)
+  (reset! gr (q/create-graphics (int (/ (q/width) 2))
+                                (int (/ (q/height) 2))
+                                :p2d))
+
+  (mtr/init)
+  (mtr/init-graphics)
+  (t/init)
+  ;(def console-font (q/load-font "data/FreeMono-16.vlw"))
+  (def console-font (q/load-font "data/app/fonts/AmericanTypewriter-24.vlw"))
+  (def title-font (q/load-font "data/app/fonts/Courier-Bold-64.vlw"))
+  ;(reset! tex1 (q/load-image "testpattern4po6.png"))
+  ;(reset! tex1 (q/load-image "UV_Grid_Sm.jpg"))
+  ;(reset! tex1 (q/load-image "uv_checker_large.png"))
+  ;(reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
+  ;(reset! tex1 (q/load-image "beach-hdr-blur128.jpg"))
+  (reset! tex1 (q/load-image "sphericalsky-b.jpg"))
+  ;(reset! tex1 (q/load-image "cube-grid.png"))
+  ;(reset! tex1 (q/load-image "cubesphere.jpg"))
+  ;(reset! tex1 (q/load-image "stereographic.jpg"))
+  ;(reset! tex1 (q/load-image "sphere_map_floor_gradient.jpg"))
+  
+  (new-state)
+  )
+
 
 
 (defn update-uniforms! [state shader] 
@@ -520,7 +509,8 @@
 
 (defn mouse-wheel [state r]
   (console/writeln (format "mousewheel: %s" r))
-  (update-in state [:camera :zoom] #(+ % (* r 0.1)))
+  (when (= (state :camera-model) :2d)
+    (update-in state [:camera :zoom] #(+ % (* r 0.1))))
   )
 
 
