@@ -145,6 +145,7 @@
 (defn on-shader-change [shaderdef]
   (load-capture-filelist shaderdef)
   (swap! transport assoc :capture-file-idx 0)
+  (swap! transport assoc :current-recording new-recording)
   (when (shader-has-captures?)
     (load-capture (get-in @transport [:capture-filenames 0]))))
 
@@ -154,8 +155,10 @@
 
 
 (defn check-loop []
-  (when (>= (@transport :current-frame-idx) (max-frame-idx))
+  (when (> (@transport :current-frame-idx) (max-frame-idx))
     (console/writeln "check-loop frame condition met")
+    (console/writeln (str "frame index: " fidx))
+    (console/writeln (str "frame count: " nframes))
     (cond
       (= (@transport :loop-mode) :none)
         (stop)
@@ -205,16 +208,38 @@
 ;  ))
 ;
 ;
+
+
 (defn draw-rec-icon [x y t]
   (let [blink-rate 2.0
         t (util/fract (* t blink-rate))
         alpha (* 255 (Math/pow (+ t 1.0) -4.0))]
     (q/no-stroke)
     (q/fill 255 0 0 alpha)
-    (q/ellipse x y 30 30)
-    )
+    (q/ellipse x y 30 30)))
 
-  )
+
+(defn draw-play-icon [x y t]
+  (let [alpha (+ 0.5 (* 0.5 (+ (* (Math/sin (* t 50)) 0.5) 0.5) )) ]
+  ;(q/fill 0 255 0 (* alpha 255))
+  (q/fill 0 128 0)
+  (q/no-stroke)
+  (q/with-translation [x y]
+    (q/scale 15)
+    (q/begin-shape :triangles)
+      (q/vertex 1.0 0.0)
+      (q/vertex -0.4999818309565503 0.8660358934324464)
+      (q/vertex -0.5000363374266711 -0.8660044233448928)
+    (q/end-shape))))
+
+
+(defn draw-idle-icon [x y t]
+  (let [s 10]
+    (q/fill 128 128 128)
+    (q/with-translation [x y]
+      (q/rect (- s) (- s) (* s 2) (* s 2)))))
+
+
 
 
 (defn draw-info [x y t]
@@ -241,9 +266,59 @@
         (q/text (lines i) x (+ y (* i line-space))))))
 
 
+(defn draw-transport [x y w h t]
+  (let [cur-frame-idx (@transport :current-frame-idx)
+        nframes (count (get-in @transport [:current-recording :frames]))
+        ;name (get-in @transport [:current-recording :name])
+        path (get-in @transport [:current-recording :path] "<none>")
+        loopmode (@transport :loop-mode)
+        status (@transport :status)
+        status-pos [30 (/ h 2)]
+        textheight 20
+        path-pos [60 25]
+        framecnt-pos [60 (+ (/ h 2) 20)]
+        tline-x 210
+        tline-y (+ (/ h 2) 12)
+        tline-w 270
+        tline-h 10
+        prog-w (if (> nframes 0) (* (/ tline-w nframes) cur-frame-idx) 0)
+        ]
+    (q/fill 0 0 0 192)
+    (q/with-translation [x y]
+      (q/rect 0 0 w h)
+      (cond
+        (= status :play)
+          (draw-play-icon (status-pos 0) (status-pos 1) t)
+        (= status :record)
+          (draw-rec-icon (status-pos 0) (status-pos 1) t)
+        :else
+          (draw-idle-icon (status-pos 0) (status-pos 1) t)
+          )
+      (q/fill 255 255 255)
+      (q/text (str path " [" (inc (@transport :capture-file-idx))
+                   "/" (count (@transport :capture-filenames)) "]" )
+              (path-pos 0) (path-pos 1))
+      (q/text (str cur-frame-idx "/" nframes)
+              (framecnt-pos 0) (framecnt-pos 1))
+
+      ; timeline
+      (q/fill 32 32 32 192)
+      (q/stroke 128 128 128 128)
+      (q/rect tline-x tline-y tline-w tline-h)
+      (q/fill 128 128 128)
+      (q/rect tline-x tline-y prog-w tline-h)
+    )
+  ))
+
+
 (defn draw-ui [x y t]
-  (draw-info x y t)
-  (draw-rec-icon (- (q/width) 50) (- (q/height) 50) t)
-  )
+  (let [ts-w 500
+        ts-h 70]
+  ;(draw-info x y t)
+  ;(draw-rec-icon (- (q/width) 50) (- (q/height) 50) t)
+  (draw-transport (- (/ (q/width) 2.0) (/ ts-w 2.0))
+                  (- (q/height) ts-h)
+                  ts-w ts-h t)
+  ))
 
 ;

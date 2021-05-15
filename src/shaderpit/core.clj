@@ -406,7 +406,9 @@
 
 (defn mouse-wheel [state r]
   (console/writeln (format "mousewheel: %s" r))
-  (if (= (state :camera-model) :2d)
+  (if (and
+        (get-in state [:camera :zoom])
+        (= (state :camera-model) :2d))
     (update-in state [:camera :zoom] #(+ % (* r 0.1)))
     state))
 
