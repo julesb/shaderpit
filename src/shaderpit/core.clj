@@ -61,6 +61,7 @@
   (let [newidx  (mod (inc (state :current-shader-idx))
                      (count (state :shaders)))
         nextshader ((get state :shaders) newidx) ]
+    (t/on-shader-change nextshader)
     (-> (util/init-with-shaderdef nextshader)
         (assoc :current-shader-idx newidx))))
 
@@ -551,7 +552,7 @@
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     
     (mtr/draw-all (- (q/width) mtr/width 20) 20)
-    (t/draw-ui (- (q/width) 300) 600, t)
+    (t/draw-ui (/ (q/width) 2) 40, t)
     (draw-info state 20 50)
     (q/fill 255)
     (q/no-tint)

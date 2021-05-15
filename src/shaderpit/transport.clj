@@ -2,6 +2,7 @@
   (:require [quil.core :as q]
             [shaderpit.console :as console]
             [shaderpit.util :as util]
+            [clojure.java.io :as io]
             ))
 
 ;(def current-recording (atom []))
@@ -15,10 +16,13 @@
   :current-recording nil
   :current-time 0
   :current-frame-idx 0
-  :loop-mode :one ; :none :one :all
+  :loop-mode :all ; :none :one :all
+  :capture-filenames []
+  :capture-file-idx 0
 })
 
 (def new-recording {
+  :path nil
   :name "New Recording"
   :frames []
   :shader nil
@@ -30,7 +34,9 @@
                 :dirty true}))
 
 (defn get-transport []
-  (update @transport :current-recording dissoc :frames))
+  (let [frames (get-in @transport [:current-recording :frames])
+        frameplaceholder (str "["( count frames) " frames]")]
+  (update @transport :current-recording assoc :frames frameplaceholder)))
 
 
 (defn clean-state [state]
@@ -45,6 +51,20 @@
         path (str "./capture/" (util/get-successor-filename basename))]
     (console/writeln (str "transport: WRITE " path))
     (spit path (@transport :current-recording))))
+
+
+(defn load-capture [fname]
+  (let [path (str (util/basedir :capture) "/" fname)]
+    (console/writeln (str "LOAD CAPTURE: " path))
+    (if (.exists (io/file path))
+      (do
+        (swap! transport assoc :current-recording (read-string (slurp path)))
+        (swap! transport assoc :current-frame-idx 0))
+      (console/writeln (str "file " path "doesn't exist")))))
+
+
+(defn shader-has-captures? []
+  (> (count (@transport :capture-filenames)) 0))
 
 
 (defn init []
@@ -66,7 +86,8 @@
         shader (dissoc (state :current-shader) :shaderobj)
         recording (-> new-recording
                       (assoc :name basename)
-                      (assoc :shader shader))
+                      (assoc :shader shader)
+                      (assoc :path (util/get-successor-filename basename)))
         newts (-> initial-transport
                   (assoc :current-time 0)
                   (assoc :current-frame 0)
@@ -75,6 +96,11 @@
     (reset! transport newts)
     (console/writeln (str "transport: RECORD"))))
 
+
+(defn load-capture-filelist [shaderdef]
+  (swap! transport assoc :capture-filenames
+         (util/get-capture-files (shaderdef :name) ))
+  )
 
 (defn frame-count []
   (count (get-in @transport [:current-recording :frames])))
@@ -116,23 +142,36 @@
       (play))))
 
 
+(defn on-shader-change [shaderdef]
+  (load-capture-filelist shaderdef)
+  (swap! transport assoc :capture-file-idx 0)
+  (when (shader-has-captures?)
+    (load-capture (get-in @transport [:capture-filenames 0]))))
+
+
 (defn max-frame-idx []
   (dec (frame-count)))
 
 
 (defn check-loop []
-  (when (= (@transport :current-frame-idx) (max-frame-idx))
+  (when (>= (@transport :current-frame-idx) (max-frame-idx))
+    (console/writeln "check-loop frame condition met")
     (cond
       (= (@transport :loop-mode) :none)
         (stop)
       (= (@transport :loop-mode) :one)
-        (do
           (swap! transport assoc :current-frame-idx 0)
-          nil)
-      (= (@transport :loop-mode) :all)
-      1; TODO
-    )
-  ))
+      (and (= (@transport :loop-mode) :all)
+           (shader-has-captures?))
+        (let [files (@transport :capture-filenames)
+                curr-file-idx (@transport :capture-file-idx)
+                curr-filename (get-in @transport [:current-recording :path])
+                num-files (count (@transport :capture-filenames))
+                new-fidx (mod (inc curr-file-idx) num-files)
+                fname (files new-fidx) ]
+          (console/writeln (str "END " curr-file-idx))
+          (swap! transport assoc :capture-file-idx new-fidx)
+          (load-capture fname)))))
 
 
 (defn capture-frame [state]
@@ -150,8 +189,7 @@
         shader (state :current-shader)]
     (if (> nframes 0)
       (do
-        (swap! transport update :current-frame-idx
-               #(int (mod (inc %) nframes)))
+        (swap! transport update :current-frame-idx inc)
         (check-loop)
         (merge state (assoc (frames fidx) :current-shader shader)))
       state)))
@@ -178,16 +216,18 @@
 
   )
 
+
 (defn draw-info [x y t]
   (q/text-font ui-font)
     (let [line-space 30
           cur-frame-idx (@transport :current-frame-idx)
           nframes (count (get-in @transport [:current-recording :frames]))
           name (get-in @transport [:current-recording :name])
+          path (get-in @transport [:current-recording :path] "<none>")
           loopmode (@transport :loop-mode)
           status (@transport :status)
           lines [
-            (str "name: " name)
+            (str "file: " path)
             (str "frame: " cur-frame-idx " / " nframes)
             (str "status: " status)
             (str "loop: " loopmode)

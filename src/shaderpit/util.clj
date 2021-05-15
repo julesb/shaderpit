@@ -104,7 +104,7 @@
 (defn define-shader
   [& {:keys [id name path type shaderobj]
       :or {id (default-shader :id)
-           name (default-shader :path) ; name=path
+           name (default-shader :path)
            path (default-shader :path)
            type (default-shader :type)
            shaderobj (default-shader :shaderobj) } }]
@@ -209,7 +209,7 @@
   (let [re (re-pattern (str "^" basename "_[\\d]{6}.capture"))
         allfiles (read-dir (basedir :capture) :all)
         files (filter #(re-matches re %) allfiles) ]
-    (sort files)))
+    (into [] (sort files))))
 
 
 (defn get-successor-filename [basename]
@@ -217,10 +217,11 @@
     (if (zero? (count files))
       (str basename "_000000.capture")
       (let [lfile (last files)
-            ordstr (clojure.string/replace lfile #"^.+([\d]{4})\.capture$" #(%1 1))
+            ordstr (clojure.string/replace lfile
+                     #"^.+([\d]{4})\.capture$" #(%1 1))
             ord (Integer/parseInt ordstr)
             succ (inc ord)]
-        (format "%s_%04d.capture" basename succ)))))
+        (format "%s_%06d.capture" basename succ)))))
 
 (defn fract [f]
   (- f (Math/floor f)))
