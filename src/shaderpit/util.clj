@@ -3,6 +3,7 @@
             [shaderpit.console :as console]
             [quil.core :as q :only [load-shader width height]]
             [clojure.java.io :as io]
+            [clojure-watch.core :refer [start-watch]]
             ))
 
 (def ^:const filepattern {
@@ -227,4 +228,37 @@
   (- f (Math/floor f)))
 
 
+
+(def glsl-watcher-event (atom {}))
+
+(defn watcher-event-handler [event filename]
+  (try
+    (when (re-matches #".+\.glsl$" filename)
+      (reset! glsl-watcher-event {:file filename :ts (ns-time)}))
+  (catch Exception e
+    (println "Exception in watcher thread: " e))))
+
+
+(defn glsl-watcher-init []
+  (start-watch [{:path "./glsl"
+               :event-types [:modify]
+               :bootstrap (fn [path] (println "init glsl watcher:" path))
+               :callback watcher-event-handler
+               :options {:recursive false}}])  )
+
+
+(defn debounce-watcher-events [state]
+  (let [evt @glsl-watcher-event]
+    (if (and
+          (not (zero? (count evt)))
+          (> (- (ns-time) (evt :ts)) 50000000)
+          (= (shader-basename (evt :file))
+             (get-in state [:current-shader :name])))
+      (do
+        (console/writeln (str "RELOAD: " (evt :file)))
+        (reset! glsl-watcher-event {})
+        (-> state
+            (update :current-shader assoc :shaderobj
+                    (q/load-shader (evt :file)))))
+      state)))
 

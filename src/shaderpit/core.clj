@@ -79,6 +79,8 @@
                                 (int (/ (q/height) 2))
                                 :p2d))
 
+  (util/glsl-watcher-init)
+
   (mtr/init)
   (mtr/init-graphics)
   (t/init)
@@ -436,6 +438,7 @@
         (t/current-frame)
         (update-uniforms! (get-in state [:current-shader :shaderobj])))
     (-> state
+        (util/debounce-watcher-events)
         (handle-resize)
         (util/clock-tick)
         (do-movement-keys)
