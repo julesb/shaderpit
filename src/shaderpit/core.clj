@@ -102,44 +102,61 @@
   ))
 
 
+(defn update-uniforms-common! [state shader]
+  (let [mp (get state :mouse-position [0 0])
+        ar (state :aspect-ratio)]
+    (.set shader "framecount" (float (q/frame-count)))
+    (.set shader "aspect_ratio" (float ar))
+    (.set shader "resolution" (float (state :render-width))
+                              (float (state :render-height)))
+    (.set shader "time" (float (util/t-now state)))
+    (.set shader "dt" (float (util/t-delta state)))))
 
-(defn update-uniforms! [state shader] 
+
+(defn update-uniforms-3d! [state shader]
+  (let [mp (get state :mouse-position [0 0])
+        ;ar (state :aspect-ratio)
+        cam-pos (get-in state [:camera :pos])
+        cam-lookat (get-in state [:camera :lookat])
+        cam-fov (get-in state [:camera :fov])
+        ]
+    (.set shader "cam_pos" (float (cam-pos 0))
+                           (float (cam-pos 1))
+                           (float (cam-pos 2)))
+    (.set shader "cam_lookat" (float (cam-lookat 0))
+                              (float (cam-lookat 1))
+                              (float (cam-lookat 2)))
+    (.set shader "cam_fov" (float cam-fov))
+    (.set shader "blend_coef" (float (get-in state [:params :blend_coef])))
+    (.set shader "ray_hit_epsilon" (float (get-in state [:params :ray_hit_epsilon] 0.001)))
+    (.set shader "palette_offset" (float (get-in state [:params :palette_offset] 0.0)))
+    (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
+    (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
+    (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
+    (.set shader "swidth" (float (state :render-width)))
+    (.set shader "sheight" (float (state :render-height)))
+    (.set shader "tex1" @tex1)
+  ))
+
+
+(defn update-uniforms-2d! [state shader]
+  (let [mp (get state :mouse-position [0 0])]
+    (.set shader "mouse" (float (mp 0)) (float (mp 1)))
+    (.set shader "zoom" (float (get-in state [:camera :zoom] 1.0)))
+    (.set shader "tex1" @gr)
+    ; TODO viewport offset
+    ; TODO viewport rotation
+    ))
+
+
+(defn update-uniforms! [state]
   (when state
-    (let [mp (get state :mouse-position [0 0])
-          ar (state :aspect-ratio)
-          cam-pos (get-in state [:camera :pos])
-          cam-lookat (get-in state [:camera :lookat])
-          cam-fov (get-in state [:camera :fov])
-          ]
-      (.set shader "framecount" (float (q/frame-count)))
-      (.set shader "aspect_ratio" (float ar))
-      (.set shader "mousex" (float (mp 0)))
-      (.set shader "mousey" (float (mp 1)))
-      (.set shader "mouse" (float (mp 0)) (float (mp 1)))
-      (.set shader "swidth" (float (state :render-width)))
-      (.set shader "sheight" (float (state :render-height)))
-      (.set shader "resolution" (float (state :render-width))
-                                (float (state :render-height)))
-      (.set shader "cam_pos" (float (cam-pos 0)) 
-                             (float (cam-pos 1))
-                             (float (cam-pos 2)))
-      (.set shader "cam_lookat" (float (cam-lookat 0)) 
-                                (float (cam-lookat 1))
-                                (float (cam-lookat 2)))
-      (.set shader "cam_fov" (float cam-fov))
-      (.set shader "blend_coef" (float (get-in state [:params :blend_coef])))
-      (.set shader "ray_hit_epsilon" (float (get-in state [:params :ray_hit_epsilon] 0.001)))
-      (.set shader "palette_offset" (float (get-in state [:params :palette_offset] 0.0)))
-      (.set shader "gamma" (float (get-in state [:params :gamma] 0.5)))
-      (.set shader "glow_intensity" (float (get-in state [:params :glow-intensity] 1.0)))
-      (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
-      (.set shader "time" (float (util/t-now state)))
-      (.set shader "tex1" @tex1)
-      (.set shader "zoom" (float (get-in state [:camera :zoom] 1.0)))
-      ;(.set shader "time" (float (/ (q/millis) 1000.0)))
-
-      )
-    state))
+    (let [shader (get-in state [:current-shader :shaderobj])]
+      (update-uniforms-common! state shader)
+      (if (= (state :camera-model) :3d)
+        (update-uniforms-3d! state shader)
+        (update-uniforms-2d! state shader))))
+  state)
 
 
 (defn get-global-mouse []
@@ -436,16 +453,15 @@
     (-> state
         (handle-resize)
         (t/current-frame)
-        (update-uniforms! (get-in state [:current-shader :shaderobj])))
+        (update-uniforms!))
     (-> state
         (util/debounce-watcher-events)
         (handle-resize)
         (util/clock-tick)
         (do-movement-keys)
         (camera-update)
-        (update-uniforms! (get-in state [:current-shader :shaderobj]))
-        (t/capture-frame)
-    )))
+        (update-uniforms!)
+        (t/capture-frame))))
 
 
 (defn draw-info [state x y]
@@ -453,7 +469,7 @@
   (let [line-space 30
         ar (get state :aspect-ratio 0.0)
         [mx my] (state :mouse-position)
-        zoom (get state :zoom 0.0)
+        zoom (get-in state [:camera :zoom] 0.0)
         pos (get-in state [:camera :pos] [0.0 0.0 0.0])
         az (get-in state [:camera :az] 0.0)
         alt (get-in state [:camera :alt] 0.0)
@@ -477,6 +493,8 @@
                (str (format "dim: %dx%d" (state :render-width) (state :render-height)))
                (str (format "fov: %.2f"  fovdeg))
                (str (format "ar: %.2f" ar))
+               (str (format "zoom: %.2f" zoom))
+
                (str (format "camera: %s" (state :camera-model)))
                (str "pos: " (v3/format pos))
                (str (format "speed: %.6f" speed))
