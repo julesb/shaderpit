@@ -143,6 +143,7 @@
   (let [mp (get state :mouse-position [0 0])]
     (.set shader "mouse" (float (mp 0)) (float (mp 1)))
     (.set shader "zoom" (float (get-in state [:camera :zoom] 1.0)))
+    (.set shader "zrot" (float (get-in state [:camera :zrot] 0.0)))
     (.set shader "tex1" @gr)
     ; TODO viewport offset
     ; TODO viewport rotation
@@ -235,6 +236,8 @@
 
         lookat (v3/add pos (v3/scale vpn 6.0))
 
+        zrot (get cam :zrot 0.0)
+
         new-cam (-> (state :camera)
                     (assoc :az az)
                     (assoc :alt alt)
@@ -244,6 +247,7 @@
                     (assoc :lookat lookat)
                     (assoc :pos pos)
                     (assoc :vel vel)
+                    (assoc :zrot zrot)
                     ) ]
 
   (when (and (state :mousewarp) (q/focused))
@@ -280,7 +284,19 @@
      (assoc-in [:mousewarp] false)))
 
 
-(defn do-key-movement [state keychar]
+(defn do-key-movement-2d [state keychar]
+  (let [key-movement-map {
+          \w (fn [s] (update-in s [:camera :zoom] #(+ % 0.001)))
+          \s (fn [s] (update-in s [:camera :zoom] #(- % 0.001)))
+          \a (fn [s] (update-in s [:camera :zrot] #(+ % 0.001)))
+          \d (fn [s] (update-in s [:camera :zrot] #(- % 0.001)))
+    }]
+    (if (contains? key-movement-map keychar)
+      ((key-movement-map keychar) state)
+      state)
+  ))
+
+(defn do-key-movement-3d [state keychar]
   (let [cam (state :camera)
         pos-old  (cam :pos)
         wup [0.0 -1.0 0.0] ; world up
@@ -333,8 +349,10 @@
     (recur state (state :keys-down))
     (if (<= (count keys-down) 0)
       state
-      (recur (do-key-movement state (first keys-down))
-             (rest keys-down)))))
+      (if (= (state :camera-model) :3d)
+        (recur (do-key-movement-3d state (first keys-down)) (rest keys-down))
+        (recur (do-key-movement-2d state (first keys-down)) (rest keys-down)))
+      )))
 
 
 (defn key-pressed [state event]
