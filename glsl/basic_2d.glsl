@@ -7,7 +7,7 @@ varying vec4 vertTexCoord;
 uniform float aspect_ratio;
 uniform float time;
 uniform vec2 mouse;
-
+uniform float zoom;
 
 float hash21(vec2 p) {
     p = fract(p * vec2(124.671, 243.563));
@@ -31,18 +31,24 @@ vec3 unitcircle(vec2 uv) {
                * smoothstep(1.02, 1.0, length(abs(uv*2.)));
 }
 
+float expr(vec2 uv) {
+    return 0.01 / length(uv - vec2(uv.x, sin(uv.x*10.)*0.1 ));
+}
+
 void main(void) {
-    vec2 uv = (vertTexCoord.st - 0.5) * vec2(aspect_ratio, 1.0) * 2.0;
+    vec2 uv = (vertTexCoord.st - 0.5) * vec2(aspect_ratio, 1.0) * zoom;
     vec2 m = (mouse - 0.5) * vec2(aspect_ratio, 1.0);
     uv -= m; // drag origin with mouse
     
     vec3 col = vec3(0.0);
     
     col += grid(uv, vec3(1,1,1), 2.0);
-    col += grid(uv, vec3(.5,.5,.5), 10.0);
+    col += grid(uv, vec3(.5,.5,.5), 8.0);
     col += unitcircle(uv);
     // dot at origin
     col += vec3(exp_glow(uv, 0.01));
+
+    col += vec3(expr(uv));
 
     gl_FragColor = vec4(col, 1.0);
 }

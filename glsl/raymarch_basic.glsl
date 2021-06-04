@@ -98,6 +98,13 @@ void main(void)
 {
     float ar = resolution.x / resolution.y;
     vec2 uv = (vertTexCoord.st - vec2(ar*0.5, 0.5)) * -1.;
+
+    vec3 offs = vec3(
+            cos(time*10. + uv.y*150.321) * 0.0125,
+            sin(time*10.1 + uv.x*151.) * 0.0125,
+            sin(time*10.1 + uv.x*152.) * 0.0125
+            );
+
     vec3 ro = cam_pos;
     
     vec3 rd = cameraray(uv, ro, cam_lookat, 0.5);
@@ -108,6 +115,7 @@ void main(void)
 
     if(d < MAX_DIST) {
         vec3 p = ro + rd * d;
+        //p -= offs*10.;
         vec3 n = getnormal(p) * 0.5;
         
         col = abs(n);

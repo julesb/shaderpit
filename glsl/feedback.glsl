@@ -1,7 +1,7 @@
 
 // 0 = clip
 // 1 = mirror
-#define BOUNDARY_MODE 0
+#define BOUNDARY_MODE 1
 
 #define  PI 3.1415927
 #define TAU 6.2831853
@@ -117,7 +117,7 @@ void main(void) {
         puv = abs(puv);
         if (puv.x > 1.) puv.x = 1. - puv.x;
         if (puv.y > 1.) puv.y = 1. - puv.y;
-        col += tx(puv).rgb;
+        col += tx(puv).rgb * 0.99;
 
     }
 

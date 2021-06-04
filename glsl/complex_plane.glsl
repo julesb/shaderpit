@@ -10,6 +10,20 @@ uniform vec2 mouse;
 uniform float zoom;
 float PI = 3.1415927;
 
+#define cx_mul(a, b) vec2(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x)
+//#define cx_div(a, b) (cx_mul(a , cx_inv(b)))
+#define cx_div(a, b) vec2(((a.x*b.x+a.y*b.y)/(b.x*b.x+b.y*b.y)),((a.y*b.x-a.x*b.y)/(b.x*b.x+b.y*b.y)))
+#define cx_modulus(a) length(a)
+#define cx_conj(a) vec2(a.x,-a.y)
+#define cx_arg(a) atan2(a.y,a.x)
+#define cx_sin(a) vec2(sin(a.x) * cosh(a.y), cos(a.x) * sinh(a.y))
+#define cx_cos(a) vec2(cos(a.x) * cosh(a.y), -sin(a.x) * sinh(a.y))
+vec2 cx_mobius(vec2 a) {
+    vec2 c1 = a - vec2(1.0,0.0);
+    vec2 c2 = a + vec2(1.0,0.0);
+    return cx_div(c1, c2);
+}
+
 float hash21(vec2 p) {
     p = fract(p * vec2(124.671, 243.563));
     p += dot(p, p + 1021.207);
@@ -47,13 +61,18 @@ float plot2d (vec2 uv) {
 
 void main(void) {
     vec2 uv = (vertTexCoord.st - 0.5) * vec2(aspect_ratio, 1.0) * zoom;
+    //uv = 0.05 / uv;
     vec2 m = (mouse - 0.5) * vec2(aspect_ratio, 1.0) * zoom/2.0;
-    uv -= m; // drag origin with mouse
+    uv = cx_mobius(cx_div(m, uv));
+    //uv -= m; // drag origin with mouse
+
+    //uv -= vec2(sin(time * 0.2), sin(time * 0.221));
+
     float s = 2.0; 
     vec3 col = vec3(0.0);
     
     col += grid(uv, vec3(1,1,1), s);
-    col += grid(uv, vec3(.25,.25,.25), s*4);
+    //col += grid(uv, vec3(.25,.25,.25), s*4);
     col += unitcircle(uv);
     col += intcircles(uv, s, vec3(0.25, 0.25, 0.25));
     
