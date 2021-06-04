@@ -157,8 +157,6 @@
 (defn check-loop []
   (when (> (@transport :current-frame-idx) (max-frame-idx))
     (console/writeln "check-loop frame condition met")
-    (console/writeln (str "frame index: " fidx))
-    (console/writeln (str "frame count: " nframes))
     (cond
       (= (@transport :loop-mode) :none)
         (stop)
