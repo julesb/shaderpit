@@ -483,12 +483,45 @@
         (t/capture-frame))))
 
 
-(defn draw-info [state x y]
+(defn draw-info-panel [props title x y]
   (q/text-font console-font)
   (let [line-space 30
-        ar (get state :aspect-ratio 0.0)
-        [mx my] (state :mouse-position)
-        zoom (get-in state [:camera :zoom] 0.0)
+        vsep 120 ]
+    (q/no-stroke)
+    (doseq [i (range (count props))]
+      (q/fill 16 16 16 192)
+      (q/rect (- x 6) (- (+ y (* i line-space)) 20)
+              (+ (q/text-width ((props i) 0)) 12) 26 12)
+      (q/rect (+ x -6 vsep) (- (+ y (* i line-space)) 20)
+              (+ (q/text-width ((props i) 1)) 12) 26 12)
+      (q/fill 255 255 255 255)
+      (q/text ((props i) 0) x (+ y (* i line-space)))
+      (q/text ((props i) 1) (+ x vsep) (+ y (* i line-space))))))
+
+
+(defn draw-info-common [state x y]
+  (let [props [
+          ["res" (format "%dx%d" (state :render-width) (state :render-height))]
+          ["ar" (format "%.2f" (get state :aspect-ratio 0.0))]
+          ["camera" (format "%s" (state :camera-model))]
+          ["time" (format "%.2f" (util/t-now state))]
+          ["dt" (format "%.2f" (util/t-delta state))]
+          ["fps" (format "%.2f" (float (q/current-frame-rate)))]
+          ["mouse" (v2/format (get state :mouse-position [0.0 0.0]))]
+        ]]
+    (draw-info-panel props "common" x y)))
+
+
+(defn draw-info-2d [state x y]
+  (let [props [
+          ["zoom" (format "%.2f" (get-in state [:camera :zoom] 0.0))]
+          ["zrot"(format "%.2f" (get-in state [:camera :zrot] 0.0))]
+        ]]
+    (draw-info-panel props "2d" x y)))
+
+
+(defn draw-info-3d [state x y]
+  (let [
         pos (get-in state [:camera :pos] [0.0 0.0 0.0])
         az (get-in state [:camera :az] 0.0)
         alt (get-in state [:camera :alt] 0.0)
@@ -502,52 +535,47 @@
         eps (get-in state [:params :ray_hit_epsilon] 0.0)
         gamma (get-in state [:params :gamma] 0.0)
         glow (get-in state [:params :glow-intensity] 0.0)
-        shadername (get-in state [:current-shader :name] "-")
-        pal-off (get-in state [:params :palette_offset] 0.0)
+        pal (get-in state [:params :palette_offset] 0.0)
         diff_spec (get-in state [:params :diff-spec] 0.5)
-        title-height 50
-        lines [
-               ;(str "state: " state)
-               ;(str "shader: " shadername)
-               (str (format "dim: %dx%d" (state :render-width) (state :render-height)))
-               (str (format "fov: %.2f"  fovdeg))
-               (str (format "ar: %.2f" ar))
-               (str (format "zoom: %.2f" zoom))
+        props [
+          ["fov" (format "%.2f"  fovdeg)]
+          ["pos" (v3/format pos)]
+          ["speed" (format "%.6f" speed)]
+          ["vpn" (v3/format vpn)]
+          ["az" (format "%.2f" az)]
+          ["alt" (format "%.2f" alt)]
+          ["dampm" (format "%.4f" dampm)]
+          ["dampr" (format "%.4f" dampr)]
+          ["eps" (format "%.8f" eps)]
+          ["blend" (format "%.2f" blend)]
+          ["gamma" (format "%.2f" gamma)]
+          ["glow" (format "%.2f" glow)]
+          ["pal" (format "%.2f" pal)]
+          ["d/s" (format "%.2f" diff_spec)]
+        ]]
+    (draw-info-panel props "3d" x y)))
 
-               (str (format "camera: %s" (state :camera-model)))
-               (str "pos: " (v3/format pos))
-               (str (format "speed: %.6f" speed))
-               (str "vpn: " (v3/format vpn))
-               (str (format "az: %.2f" az))
-               (str (format "alt: %.2f" alt))
-               (str (format "dampm: %.4f" dampm))
-               (str (format "dampr: %.4f" dampr))
-               (str (format "mouse: [%.2f %.2f]" (float mx) (float my)))
-               (str (format "eps: %.8f" eps))
-               (str (format "blend: %.2f" blend))
-               (str (format "gamma: %.2f" gamma))
-               (str (format "glow: %.2f" glow))
-               (str (format "pal: %.2f" pal-off))
-               (str (format "d/s: %.2f" diff_spec))
-               ;(str "camera: " (state :camera))
-               (str (format "time %.2f" (util/t-now state)))
-               (str (format "dt %.5f" (util/t-delta state)))
-               (str (format "fps: %.2f" (float (q/current-frame-rate))))
-               ]]
-    ;(q/fill 255 255 255 255)
+
+(defn draw-info [state x y]
+  (let [shadername (get-in state [:current-shader :name] "-")
+        title-height 50
+        common-height 220
+        vspace 20]
+    (q/fill 0 0 0 128)
     (q/no-stroke)
+    (q/rect (- x 16)
+            (- y title-height)
+            (+ (* (q/text-width shadername) 4) 16)
+            (+ title-height 16)
+            35)
     (q/fill 255 255 255 192)
     (q/text-font title-font)
     (q/text shadername x y)
     (q/text-font console-font)
-    (doseq [i (range (count lines))]
-      (q/fill 0 0 0 128)
-      (q/rect (- x 6) (- (+ title-height y (* i line-space)) 20)
-              (+ (q/text-width (lines i)) 12) 26 12)
-      (q/fill 255 255 255 192)
-      (q/text (lines i) x (+ title-height y (* i line-space))))))
-    ;(doseq [i (range (count lines))]
-    ;  (q/text (lines i) x (+ y (* i line-space))))))
+    (draw-info-common state x (+ y title-height))
+    (if (= (state :camera-model) :2d)
+      (draw-info-2d state x (+ y title-height vspace common-height))
+      (draw-info-3d state x (+ y title-height vspace common-height)))))
 
 
 (defn draw-quad [state ar]
@@ -595,7 +623,7 @@
     
     (mtr/draw-all (- (q/width) mtr/width 20) 20)
     (t/draw-ui (/ (q/width) 2) 40, t)
-    (draw-info state 20 50)
+    (draw-info state 20 70)
     (q/fill 255)
     (q/no-tint)
     (q/image (console/get-image) 0 (- (q/height) (console/size 1) 10))
