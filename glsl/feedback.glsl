@@ -1,7 +1,10 @@
-#ifdef GL_ES
-precision mediump float;
-precision mediump int;
-#endif
+
+// 0 = clip
+// 1 = mirror
+#define BOUNDARY_MODE 0
+
+#define  PI 3.1415927
+#define TAU 6.2831853
 
 varying vec4 vertTexCoord;
 uniform float aspect_ratio;
@@ -12,8 +15,6 @@ uniform float zoom;
 uniform float zrot;
 
 uniform sampler2D tex1;
-float PI = 3.1415927;
-float TAU = 2. * PI;
 
 mat2 rot(float a) {
     float s=sin(a), c=cos(a);
@@ -28,6 +29,10 @@ float hash21(vec2 p) {
 
 float hash11(float p) {
     return fract((sin(p)*0.5+0.5) * 249.8631);
+}
+
+vec3 hash23(vec2 p) {
+    return vec3(hash21(p+1456.78), hash21(p+1203.45), hash21(p+2134.67));
 }
 
 float exp_glow(vec2 uv, float e) {
@@ -70,10 +75,6 @@ vec3 blur(in vec2 p){
 
 void main(void) {
     float scale = 2.;
-    float NUM_LAYERS = 64.0;
-
-    vec2 nb = 1.0 / resolution;
-
     vec2 uv = (vertTexCoord.st - 0.5) * vec2(aspect_ratio, 1.0);
     uv *= scale;
     vec2 m = (mouse - 0.5) * vec2(aspect_ratio, 1.0) * scale/2.0;
@@ -81,35 +82,51 @@ void main(void) {
 
     // rotate / zoom previous frame UVs
     vec2 puv = (vertTexCoord.st - 0.5 ) * zoom * vec2(aspect_ratio, 1.0);
-    puv *= rot(zrot + sin(time*0.01)*TAU);
-    //puv *= rot(zrot);
+    puv *= rot(cos(time*0.005)*TAU); // auto rotate
+    //puv *= rot(zrot); // interactive rotate
     puv.x /= aspect_ratio;
     puv += 0.5;
     
-    //uv.x += cos(time*1. + uv.y*1.321) * 0.25;
-    //uv.y += sin(time*1.1 + uv.x*1.) * 0.25;
-    m = vec2(cos(time*0.5 + uv.y*1.321) * 0.4,
-             sin(time*0.41 + uv.x*1.) * 0.4);
+    // screenspace wobble
+    //puv.x += cos(time*1. + uv.y*15.321) * 0.002125;
+    //puv.y += sin(time*1.1 + uv.x*15.) * 0.002125;
+
+    // auto mouse wander
+    m = vec2(cos(time*0.74 + uv.y*5.321) * 0.4,
+             sin(time*0.68 + uv.x*1.) * 0.4);
 
     vec3 col = vec3(0.0);
-    
 
-    //col += grid(uv, vec3(0.2,0.2,0.2), s);
+    // dot at mouse
+    col += hsv2rgb(vec3(time*0.2, 1., 1.)) * exp_glow(uv-m, 0.0015);
 
-    // dot at origin
-    col += hsv2rgb(vec3(time*0.25, 1., 1.)) * exp_glow(uv-m, 0.0015);
-    
-    // dot at x = +1
+    // axis reference dot at x = +1
     //col += vec3(1,0,0) * vec3(exp_glow(uv*scale-vec2(1.0, 0.0), 0.0125));
-    // dot at y = +1
+    // axis reference dot at y = +1
     //col += vec3(0,1,0) * vec3(exp_glow(uv*scale-vec2(0.0, 1.0), 0.0125));
     
-    if (puv.x > 0. && puv.x < 1. && puv.y > 0. && puv.y < 1.) { 
-        //col += blur(puv) * 0.99;
-        col += tx(puv).rgb * 0.99;
+    if (BOUNDARY_MODE == 0) {
+        // clip puv
+        if (puv.x > 0. && puv.x < 1. && puv.y > 0. && puv.y < 1.) {
+            //col += blur(puv).rgb;// * 0.95;
+            col += tx(puv).rgb;// * 0.9;
+        }
     }
+    else {
+        // mirror puv
+        puv = abs(puv);
+        if (puv.x > 1.) puv.x = 1. - puv.x;
+        if (puv.y > 1.) puv.y = 1. - puv.y;
+        col += tx(puv).rgb;
+
+    }
+
+    // noise
+    //col += hash23(uv * time*0.1) * 0.1;
+    //col += hash21(uv+time) * 0.01;
+    //col = vec3(hash21(uv+time), hash21(uv*1.1+time), hash21(uv*1.2+time)) * 1.00;
     
-    //col += hash21(uv) * 0.001;
+    //col *= (1.- dot(uv, uv)); // vignette
 
     gl_FragColor = vec4(col, 1.0);
 }
