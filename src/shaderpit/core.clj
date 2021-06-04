@@ -286,8 +286,8 @@
 
 (defn do-key-movement-2d [state keychar]
   (let [key-movement-map {
-          \w (fn [s] (update-in s [:camera :zoom] #(+ % 0.001)))
-          \s (fn [s] (update-in s [:camera :zoom] #(- % 0.001)))
+          \w (fn [s] (update-in s [:camera :zoom] #(- % 0.001)))
+          \s (fn [s] (update-in s [:camera :zoom] #(+ % 0.001)))
           \a (fn [s] (update-in s [:camera :zrot] #(+ % 0.001)))
           \d (fn [s] (update-in s [:camera :zrot] #(- % 0.001)))
     }]
@@ -295,6 +295,7 @@
       ((key-movement-map keychar) state)
       state)
   ))
+
 
 (defn do-key-movement-3d [state keychar]
   (let [cam (state :camera)
@@ -446,7 +447,7 @@
   (if (and
         (get-in state [:camera :zoom])
         (= (state :camera-model) :2d))
-    (update-in state [:camera :zoom] #(+ % (* r 0.1)))
+    (update-in state [:camera :zoom] #(+ % (* r 0.001)))
     state))
 
 
