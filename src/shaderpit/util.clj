@@ -41,6 +41,7 @@
   :damp-r 0.0005
   :damp-m 0.5
   :zoom 1.0
+  :zrot 0.0
 })
 
 (def initial-params {
