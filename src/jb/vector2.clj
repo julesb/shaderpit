@@ -51,9 +51,9 @@
 
 
 (defn format [v]
-  (if (and (not= nil v) (>= (count v) 2))
-    (clojure.core/format "[%.2f %.2f]" (v 0) (v 1))
-    ""))
+  (clojure.core/format "[%.2f %.2f]"
+                       (float (get v 0 0.0))
+                       (float (get v 1 0.0))))
 
 ; http://paulbourke.net/geometry/lineline2d/"
 
