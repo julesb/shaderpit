@@ -28,7 +28,7 @@
 (def robot (new Robot))
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
-
+(def target-fps (atom 60))
 
 ; =========================================================================
 
@@ -74,7 +74,7 @@
   (q/texture-wrap :repeat)
   (q/noise-detail 2)
   (q/hint :disable-depth-test)
-  (q/frame-rate 60)
+  (q/frame-rate @target-fps)
   (reset! gr (q/create-graphics (int (/ (q/width) 2))
                                 (int (/ (q/height) 2))
                                 :p2d))
@@ -92,7 +92,10 @@
   ;(reset! tex1 (q/load-image "uv_checker_large.png"))
   ;(reset! tex1 (q/load-image "Sky02-blur128x12.jpg"))
   ;(reset! tex1 (q/load-image "beach-hdr-blur128.jpg"))
-  (reset! tex1 (q/load-image "sphericalsky-b.jpg"))
+  ;(reset! tex1 (q/load-image "sphericalsky-b.jpg"))
+  ;(reset! tex1 (q/load-image "jellybeans.jpg"))
+  (reset! tex1 (q/load-image "equirect-columns.jpg"))
+  ;(reset! tex1 (q/load-image "equirect-latlong.jpg"))
   ;(reset! tex1 (q/load-image "cube-grid.png"))
   ;(reset! tex1 (q/load-image "cubesphere.jpg"))
   ;(reset! tex1 (q/load-image "stereographic.jpg"))
@@ -135,7 +138,7 @@
     (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
     (.set shader "swidth" (float (state :render-width)))
     (.set shader "sheight" (float (state :render-height)))
-    (.set shader "tex1" @tex1)
+    ;(.set shader "tex1" @tex1)
   ))
 
 
@@ -288,8 +291,8 @@
   (let [key-movement-map {
           \w (fn [s] (update-in s [:camera :zoom] #(- % 0.001)))
           \s (fn [s] (update-in s [:camera :zoom] #(+ % 0.001)))
-          \a (fn [s] (update-in s [:camera :zrot] #(+ % 0.001)))
-          \d (fn [s] (update-in s [:camera :zrot] #(- % 0.001)))
+          \a (fn [s] (update-in s [:camera :zrot] #(+ % 0.0001)))
+          \d (fn [s] (update-in s [:camera :zrot] #(- % 0.0001)))
     }]
     (if (contains? key-movement-map keychar)
       ((key-movement-map keychar) state)
@@ -423,6 +426,15 @@
          (if (t/playing?)
            (update state :mousewarp :false)
            (update state :mousewarp :true)))
+    \Q (do
+         (q/exit)
+         state)
+    \$ (do
+         (if (= @target-fps 60)
+           (reset! target-fps 600)
+           (reset! target-fps 60))
+         (q/frame-rate @target-fps)
+         state)
     state))
 
 
@@ -447,7 +459,7 @@
   (if (and
         (get-in state [:camera :zoom])
         (= (state :camera-model) :2d))
-    (update-in state [:camera :zoom] #(+ % (* r 0.001)))
+    (update-in state [:camera :zoom] #(+ % (* r 0.01)))
     state))
 
 
@@ -605,7 +617,8 @@
         t (util/t-now state)
         ]
     (q/with-graphics @gr
-      (q/texture-wrap :repeat)
+      ;(q/texture-wrap :clamp)
+      (q/hint :disable-texture-mipmaps)
       (q/with-translation rc
         (q/scale (sc 0) (sc 1))
         ;(when (q/loaded? shd)
