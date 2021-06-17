@@ -29,10 +29,12 @@
 (def global-mouse (atom [0 0]))
 (def global-pmouse (atom [0 0]))
 (def target-fps (atom 60))
-
+(def draw-info? (atom true))
 ; =========================================================================
 
 
+(defn screen-to-ndc [screenpos]
+  (v2/div screenpos [(q/width) (q/height)]))
 
 
 (defn center-cursor []
@@ -138,13 +140,20 @@
     (.set shader "diff_spec" (float (get-in state [:params :diff-spec] 0.5)))
     (.set shader "swidth" (float (state :render-width)))
     (.set shader "sheight" (float (state :render-height)))
-    ;(.set shader "tex1" @tex1)
+    (.set shader "tex1" @tex1)
   ))
 
 
 (defn update-uniforms-2d! [state shader]
-  (let [mp (get state :mouse-position [0 0])]
+  (let [mp (get state :mouse-position [0 0])
+        ml (get state :mouse-l [0.0 0.0])
+        mc (get state :mouse-c [0.0 0.0])
+        mr (get state :mouse-r [0.0 0.0])
+        ]
     (.set shader "mouse" (float (mp 0)) (float (mp 1)))
+    (.set shader "mouse_l" (float (ml 0)) (float (ml 1)))
+    (.set shader "mouse_c" (float (mc 0)) (float (mc 1)))
+    (.set shader "mouse_r" (float (mr 0)) (float (mr 1)))
     (.set shader "zoom" (float (get-in state [:camera :zoom] 1.0)))
     (.set shader "zrot" (float (get-in state [:camera :zrot] 0.0)))
     (.set shader "tex1" @gr)
@@ -435,6 +444,9 @@
            (reset! target-fps 60))
          (q/frame-rate @target-fps)
          state)
+    \i (do
+         (swap! draw-info? not)
+         state)
     state))
 
 
@@ -446,13 +458,29 @@
 
 
 (defn mouse-dragged [state event]
+  (let [m (screen-to-ndc [(event :x) (event :y)])
+        m [(m 0) (- 1.0 (m 1))]
+        m1 (if (= (q/mouse-button) :left) m (get state :mouse-l [0.0 0.0]))
+        m2 (if (= (q/mouse-button) :center) m (get state :mouse-c [0.0 0.0]))
+        m3 (if (= (q/mouse-button) :right) m (get state :mouse-r [0.0 0.0]))
+        ]
+
+    ;(console/writeln (format "mouse: %s" (v2/format p)))
+    (-> state
+        (assoc :mouse-position m)
+        (assoc :mouse-l m1)
+        (assoc :mouse-c m2)
+        (assoc :mouse-r m3)
+        )))
+
+
+(defn mouse-dragged1 [state event]
   (let [p [(/ (float (event :x)) (q/width))
            (/ (float (event :y)) (q/height))]
         p [(p 0) (- 1.0 (p 1))]]
     ;(console/writeln (format "mouse: %s" (v2/format p)))
     (-> state
         (assoc :mouse-position p))))
-
 
 (defn mouse-wheel [state r]
   (console/writeln (format "mousewheel: %s" r))
@@ -585,9 +613,10 @@
     (q/text shadername x y)
     (q/text-font console-font)
     (draw-info-common state x (+ y title-height))
-    (if (= (state :camera-model) :2d)
-      (draw-info-2d state x (+ y title-height vspace common-height))
-      (draw-info-3d state x (+ y title-height vspace common-height)))))
+    (when @draw-info?
+      (if (= (state :camera-model) :2d)
+        (draw-info-2d state x (+ y title-height vspace common-height))
+        (draw-info-3d state x (+ y title-height vspace common-height))))))
 
 
 (defn draw-quad [state ar]
@@ -634,12 +663,13 @@
     (q/image @gr 0 0 (q/width) (q/height))
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     
-    (mtr/draw-all (- (q/width) mtr/width 20) 20)
-    (t/draw-ui (/ (q/width) 2) 40, t)
     (draw-info state 20 70)
-    (q/fill 255)
-    (q/no-tint)
-    (q/image (console/get-image) 0 (- (q/height) (console/size 1) 10))
+    (when @draw-info?
+      (mtr/draw-all (- (q/width) mtr/width 20) 20)
+      (t/draw-ui (/ (q/width) 2) 40, t)
+      (q/fill 255)
+      (q/no-tint)
+      (q/image (console/get-image) 0 (- (q/height) (console/size 1) 10)))
   ))
 
 
