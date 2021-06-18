@@ -1,7 +1,7 @@
 
 // 0 = clip
 // 1 = mirror
-#define BOUNDARY_MODE 1
+#define BOUNDARY_MODE 0
 
 #define  PI 3.1415927
 #define TAU 6.2831853
@@ -52,6 +52,16 @@ vec3 hsv2rgb(vec3 c)
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+vec3 rgb2hsv(vec3 c)
+{
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
 vec4 tx(in vec2 p){ return texture2D(tex1, p); }
 
 vec3 blur(in vec2 p){
@@ -80,9 +90,14 @@ void main(void) {
     vec2 m = (mouse - 0.5) * vec2(aspect_ratio, 1.0) * scale/2.0;
     //uv -= m; // drag origin with mouse
 
+    //uv = abs(uv);
+
     // rotate / zoom previous frame UVs
     vec2 puv = (vertTexCoord.st - 0.5 ) * zoom * vec2(aspect_ratio, 1.0);
-    puv *= rot(cos(time*0.005)*TAU); // auto rotate
+    
+    float ang = cos(time*0.005) * TAU;
+
+    puv *= rot(ang); // auto rotate
     //puv *= rot(zrot); // interactive rotate
     puv.x /= aspect_ratio;
     puv += 0.5;
@@ -97,8 +112,10 @@ void main(void) {
 
     vec3 col = vec3(0.0);
 
+    vec3 dotcol = hsv2rgb(vec3(ang * 60., 1.0, 1.0));
     // dot at mouse
-    col += hsv2rgb(vec3(time*0.2, 1., 1.)) * exp_glow(uv-m, 0.0015);
+   col += (dotcol * exp_glow(uv-m, 0.0025));
+    //col += hsv2rgb(vec3(time*0.2, 1., 1.)) * exp_glow(uv-m, 0.0015);
 
     // axis reference dot at x = +1
     //col += vec3(1,0,0) * vec3(exp_glow(uv*scale-vec2(1.0, 0.0), 0.0125));
@@ -117,15 +134,20 @@ void main(void) {
         puv = abs(puv);
         if (puv.x > 1.) puv.x = 1. - puv.x;
         if (puv.y > 1.) puv.y = 1. - puv.y;
-        col += tx(puv).rgb * 0.99;
+        col += tx(puv).rgb * 0.95;
 
     }
+
+    //col = (col - 0.125) * 2.0;
+
+    //col = col*col;
 
     // noise
     //col += hash23(uv * time*0.1) * 0.1;
     //col += hash21(uv+time) * 0.01;
     //col = vec3(hash21(uv+time), hash21(uv*1.1+time), hash21(uv*1.2+time)) * 1.00;
     
+    //col *= (0.97 + vec3(length(uv)*2.)*0.03); // vignette
     //col *= (1.- dot(uv, uv)); // vignette
 
     gl_FragColor = vec4(col, 1.0);

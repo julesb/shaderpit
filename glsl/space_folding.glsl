@@ -37,6 +37,10 @@ vec2 vmin(vec2 a, vec2 b) {
     return a.x > b.x? b : a;
 }
 
+vec3 op_rep(vec3 p, vec3 spread) {
+    return mod(p+spread*0.5, spread) - spread*0.5;
+}
+
 float sdBox(vec3 p, vec3 s) {
     p = abs(p)-s;
 	return length(max(p, 0.))+min(max(p.x, max(p.y, p.z)), 0.);
@@ -75,12 +79,37 @@ vec3 material(float index) {
     return vec3(0.0, 0.0, 0.0);
 }
 
+
+vec2 folding(vec3 p) 
+{
+    vec3 n = vec3(1., 0., 0.);
+    n.xz *= rot2(time * 0.2);
+    float d = dot(p.xz, n.xz);
+    //d = abs(d);
+    p.xy -= n.xy*min(d, 0.0) * 2.0;
+    p = op_rep(p, vec3(10.0, 0.0, 10.0));
+    vec2 b = Box(p - vec3(2., 0., 0.), vec3(1), 1.0);
+    
+    return b;
+}
+
 vec2 vscene(vec3 p) {
-    vec2 plane = Plane(p, 0.0);
-    vec2 box = Box(p - vec3(3., 1., 0.), vec3(1), 1.0);
-    vec2 sphere = Sphere(p - vec3(0., 1., 0.), 1.4, 2.0);
-    vec2 objects = vmin(box, sphere);
-    return vmin(objects, plane);
+    //p = abs(p);
+    //p.xz *= rot2(PI/3.);
+    //p = op_rep(p, vec3(10.0, 0.0, 10.0));
+    //p.x = fract (p.x* 0.1 + time*0.01);
+    //p -= vec3(0., 1., 1.);
+    //p.xz = abs(p.xz);
+    //vec2 plane = Plane(p, 0.0);
+    //vec2 box = Box(p - vec3(2., 0., 0.), vec3(1), 1.0);
+    vec2 f = folding(p);
+    vec2 s = Sphere(p, 2.0, 2.0);
+
+    return vmin(f, s);
+    //vec2 sphere = Sphere(p - vec3(0., 1., 0.), 1.4, 2.0);
+    //vec2 objects = vmin(box, sphere);
+    //return vmin(objects, plane);
+    //return box;
 }
 
 
@@ -130,6 +159,8 @@ void main(void)
     vec2 r = vraymarch(ro, rd);
     float d = r.x;
     vec3 col = material(r.y);
+
+    
 
     if(d < MAX_DIST) {
         vec3 p = ro + rd * d;

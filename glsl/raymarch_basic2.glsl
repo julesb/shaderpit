@@ -80,7 +80,7 @@ vec2 raymarch(vec3 ro, vec3 rd) {
         if (dO > MAX_DIST || abs(dS) < SURF_DIST)
             break;
     }
-    return vec2(dO, g);
+    return vec2(dO, g/MAX_STEPS);
 }
 
 vec3 getnormal(vec3 p) {
@@ -123,29 +123,35 @@ void main(void)
     vec2 d = raymarch(ro, rd);
     //float d = raymarch(ro, rd);
 
-    vec3 glow = vec3(d.y / MAX_STEPS);
+    float glow = d.y;
 
     if(d.x < MAX_DIST) {
         vec3 p = ro + rd * d.x;
         vec3 n = getnormal(p) * 0.5;
         
-        col = abs(n);
-        //glow *= col;
+        col = n * 0.5 + 0.5;
+        //col = abs(n);
+        col *= glow * 5.;
 
         float diffuse = dot(n, normalize(vec3(1,2,3)))*.5+.5;
         col *= vec3(diffuse * 1.);
+
+        //col += vec3(.2, .3, .7) * exp(d.y*0.01) -1.0;
+
+        //col += vec3(d.y);
+
         // col *= p.y * 0.3;
         //col += vec3(.1, .1, 1.) * smoothstep(0., 0.1, p.y);
         //col += vec3(0., 0., 1.) * smoothstep(0., 0.001, p.y);
     }
     else {
-        col = sky(tex1, rd);
-        //col = vec3(.2, .3, .7);
+        //col = sky(tex1, rd);
+        //col = vec3(d.y);
+        col = vec3(.2, .3, .7) + glow;
     }
     
     //col += glow;
-
     //col = texture2D(tex1, vertTexCoord.st).rgb;
-    col = pow(col, vec3(gamma));	// gamma correction
+    //col = pow(col, vec3(gamma));	// gamma correction
     gl_FragColor = vec4(col, 1.0);
 }
