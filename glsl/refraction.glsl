@@ -102,6 +102,12 @@ float sdRhombTriac(vec3 p) {
     return d;
 }
 
+float sdRhombDodeca(vec3 p) {
+    p = abs(p);
+    p += p.yzx;
+    return (max(max(p.x,p.y),p.z)-1.) * sqrt(.5);
+}
+
 float opIntersection( float d1, float d2 ) { return max(d1,d2); }
 
 float opSmoothIntersection( float d1, float d2, float k ) {
@@ -134,6 +140,8 @@ float scene(vec3 p) {
     
     float octa = sdOctahedron2(opos, 2.0) - 0.15;
     
+    float rd = sdRhombDodeca(p/2.0 - vec3(0.0, 0.0, 3.0)) * 2.0;
+
     vec3 lpos = p - vec3(0., 5., 0.);
     //lpos.xz *= rot2(PI*0.5);
     
@@ -149,6 +157,7 @@ float scene(vec3 p) {
     //float objects = min(rhombtri, sphere);
     objects = min(objects, octa);
     objects = min(objects, lens);
+    objects = min(objects, rd);
     return objects;
     //float plane = p.y;
     //return min(objects, plane);

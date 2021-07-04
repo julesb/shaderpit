@@ -39,6 +39,7 @@ vec3 loopfold(vec2 uv, vec2 p) {
         float d = dot(uv-p, n);
         uv -= n * min(d, 0.0) * 2.0;
         
+
         col += vec3(1,1,1) * 0.5 * smoothstep(0.05, 0.0, abs(d));
     }
 
