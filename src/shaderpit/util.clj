@@ -72,6 +72,9 @@
   :ns-now 0
   :ns-delta 0
   :ns-prev 0
+  :brightness 1.0
+  :saturation 1.0
+  :contrast 0.5
 })
 
 (defn ns-time []
@@ -198,7 +201,8 @@
         savedstate (load-shader-state initial-state shaderdef)
         render-width (int (/ (q/width) 2))
         render-height (int (/ (q/height) 2))]
-    (-> savedstate
+    (-> initial-state
+        (merge savedstate)
         (assoc :render-width render-width)
         (assoc :render-height render-height)
         (assoc :aspect-ratio (/ (float (q/width)) (q/height)))
