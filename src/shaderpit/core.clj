@@ -156,6 +156,10 @@
     (.set shader "mouse_r" (float (mr 0)) (float (mr 1)))
     (.set shader "zoom" (float (get-in state [:camera :zoom] 1.0)))
     (.set shader "zrot" (float (get-in state [:camera :zrot] 0.0)))
+    (.set shader "brightness" (float (get-in state [:brightness] 1.0)))
+    (.set shader "contrast" (float (get-in state [:contrast] 1.0)))
+    (.set shader "saturation" (float (get-in state [:saturation] 1.0)))
+
     (.set shader "tex1" @gr)
     ; TODO viewport offset
     ; TODO viewport rotation
@@ -300,8 +304,14 @@
   (let [key-movement-map {
           \w (fn [s] (update-in s [:camera :zoom] #(- % 0.001)))
           \s (fn [s] (update-in s [:camera :zoom] #(+ % 0.001)))
-          \a (fn [s] (update-in s [:camera :zrot] #(+ % 0.0001)))
-          \d (fn [s] (update-in s [:camera :zrot] #(- % 0.0001)))
+          \a (fn [s] (update-in s [:camera :zrot] #(+ % 0.001)))
+          \d (fn [s] (update-in s [:camera :zrot] #(- % 0.001)))
+          \1 (fn [s] (update-in s [:brightness] #(- % 0.01)))
+          \2 (fn [s] (update-in s [:brightness] #(+ % 0.01)))
+          \3 (fn [s] (update-in s [:contrast] #(- % 0.01)))
+          \4 (fn [s] (update-in s [:contrast] #(+ % 0.01)))
+          \5 (fn [s] (update-in s [:saturation] #(- % 0.01)))
+          \6 (fn [s] (update-in s [:saturation] #(+ % 0.01)))
     }]
     (if (contains? key-movement-map keychar)
       ((key-movement-map keychar) state)
@@ -474,14 +484,6 @@
         )))
 
 
-(defn mouse-dragged1 [state event]
-  (let [p [(/ (float (event :x)) (q/width))
-           (/ (float (event :y)) (q/height))]
-        p [(p 0) (- 1.0 (p 1))]]
-    ;(console/writeln (format "mouse: %s" (v2/format p)))
-    (-> state
-        (assoc :mouse-position p))))
-
 (defn mouse-wheel [state r]
   (console/writeln (format "mousewheel: %s" r))
   (if (and
@@ -526,7 +528,7 @@
 (defn draw-info-panel [props title x y]
   (q/text-font console-font)
   (let [line-space 30
-        vsep 120 ]
+        vsep 140 ]
     (q/no-stroke)
     (doseq [i (range (count props))]
       (q/fill 16 16 16 192)
@@ -556,6 +558,9 @@
   (let [props [
           ["zoom" (format "%.2f" (get-in state [:camera :zoom] 0.0))]
           ["zrot"(format "%.2f" (get-in state [:camera :zrot] 0.0))]
+          ["brightness"(format "%.2f" (get-in state [:brightness] 0.0))]
+          ["contrast"(format "%.2f" (get-in state [:contrast] 0.0))]
+          ["saturation"(format "%.2f" (get-in state [:saturation] 0.0))]
         ]]
     (draw-info-panel props "2d" x y)))
 
@@ -646,8 +651,8 @@
         t (util/t-now state)
         ]
     (q/with-graphics @gr
-      ;(q/texture-wrap :clamp)
-      (q/hint :disable-texture-mipmaps)
+      (q/texture-wrap :repeat)
+      (q/hint :enable-texture-mipmaps)
       (q/with-translation rc
         (q/scale (sc 0) (sc 1))
         ;(when (q/loaded? shd)
