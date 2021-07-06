@@ -4,9 +4,11 @@
             [jb.vector2 :as v2]
             [jb.vector3 :as v3]
             [shaderpit.metrics :as mtr]
+            [shaderpit.spectrogram :as spect]
             [shaderpit.console :as console]
             [shaderpit.util :as util]
             [shaderpit.transport :as t]
+            [shaderpit.audio :as audio]
             [clojure.string :as str]
             [clojure.java.io :as io])
   (:import java.awt.event.KeyEvent
@@ -30,6 +32,9 @@
 (def global-pmouse (atom [0 0]))
 (def target-fps (atom 60))
 (def draw-info? (atom true))
+(def ^:const fft-bands 256)
+(def ^:dynamic shaderpit)
+
 ; =========================================================================
 
 
@@ -70,6 +75,8 @@
 
 (defn setup []
   (console/init)
+  (audio/init shaderpit 0 fft-bands)
+  (audio/start)
   ;(q/smooth)
   (q/no-cursor)
   (q/texture-mode :normal)
@@ -82,7 +89,7 @@
                                 :p2d))
 
   (util/glsl-watcher-init)
-
+  (spect/init 256 fft-bands)
   (mtr/init)
   (mtr/init-graphics)
   (t/init)
@@ -633,6 +640,8 @@
   (q/end-shape))
 
 
+
+
 (defn draw-quad-uv01 [state ar]
   (q/begin-shape :quads)
     (q/vertex -1 -1  0.0  1.0)
@@ -649,6 +658,7 @@
         ar (get state :aspect-ratio 1.0)
         t-render-start (System/nanoTime)
         t (util/t-now state)
+        spectrum (audio/get-fft)
         ]
     (q/with-graphics @gr
       (q/texture-wrap :repeat)
@@ -668,6 +678,9 @@
     (q/image @gr 0 0 (q/width) (q/height))
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     
+    (spect/draw-fft 0 (/ (q/height) 2) fft-bands 400 spectrum)
+    (spect/draw (- (q/width) 1100) (/ (q/height) 3) spectrum)
+
     (draw-info state 20 70)
     (when @draw-info?
       (mtr/draw-all (- (q/width) mtr/width 20) 20)
