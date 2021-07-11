@@ -91,12 +91,12 @@ void main(void) {
     //vec2 scrolluv = uv + vec2(0.0, fwidth(uv.y)); // vertical scroll
     vec2 scrolluv = uv + vec2(fwidth(uv.x), 0.0);  //horizontal scroll
 
-    vec2 fftuv = vec2(uv.y * 0.25, 0.5);
+    vec2 fftuv = vec2(uv.y * 0.5, 0.5);
     //vec2 fftuv = vec2(abs(uv.x - 0.5) * 1.0, 0.0); // symmetrical centered
 
-    float fftval = texture2D(fft, fftuv).x;
     
     if (uv.x > 1.0 - fwidth(uv.x) && uv.x < 1.0) {
+        float fftval = texture2D(fft, fftuv).x;
         col = magma_quintic(fftval) ;
     }
     else {
