@@ -4,11 +4,11 @@
             [jb.vector2 :as v2]
             [jb.vector3 :as v3]
             [shaderpit.metrics :as mtr]
-            [shaderpit.spectrogram :as spect]
             [shaderpit.console :as console]
             [shaderpit.util :as util]
             [shaderpit.transport :as t]
             [shaderpit.audio :as audio]
+            [shaderpit.audiovisual :as av]
             [clojure.string :as str]
             [clojure.java.io :as io])
   (:import java.awt.event.KeyEvent
@@ -89,7 +89,7 @@
                                 :p2d))
 
   (util/glsl-watcher-init)
-  (spect/init 256 fft-bands)
+  (av/init)
   (mtr/init)
   (mtr/init-graphics)
   (t/init)
@@ -168,6 +168,8 @@
     (.set shader "saturation" (float (get-in state [:saturation] 1.0)))
 
     (.set shader "tex1" @gr)
+    (.set shader "fft" @av/fft-tex)
+    (.set shader "rms" (float (audio/get-input-rms)))
     ; TODO viewport offset
     ; TODO viewport rotation
     ))
@@ -517,6 +519,7 @@
 
 (defn state-update [state]
   (console/update!)
+  (av/update-fft-tex (audio/get-fft-smooth ))
   (if (t/playing?)
     (-> state
         (handle-resize)
@@ -658,11 +661,11 @@
         ar (get state :aspect-ratio 1.0)
         t-render-start (System/nanoTime)
         t (util/t-now state)
-        spectrum (audio/get-fft)
+        rms (audio/get-input-rms)
         ]
     (q/with-graphics @gr
       (q/texture-wrap :repeat)
-      (q/hint :enable-texture-mipmaps)
+      (q/hint :disable-texture-mipmaps)
       (q/with-translation rc
         (q/scale (sc 0) (sc 1))
         ;(when (q/loaded? shd)
@@ -678,8 +681,8 @@
     (q/image @gr 0 0 (q/width) (q/height))
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     
-    (spect/draw-fft 0 (/ (q/height) 2) fft-bands 400 spectrum)
-    (spect/draw (- (q/width) 1100) (/ (q/height) 3) spectrum)
+    (av/draw-fft 300 40 2048 400 )
+    (av/draw-input-level 20 (/ (q/height) 2) 30 200 rms)
 
     (draw-info state 20 70)
     (when @draw-info?
