@@ -68,23 +68,40 @@ vec3 plasma_quintic( float x )
         + dot( x2.xy, vec2( -1.916810682, +0.570638854 ) ) );
 }
 
+vec3 magma_quintic( float x )
+{
+	x = saturate( x );
+	vec4 x1 = vec4( 1.0, x, x * x, x * x * x ); // 1 x x2 x3
+	vec4 x2 = x1 * x1.w * x; // x4 x5 x6 x7
+	return vec3(
+		dot( x1.xyzw, vec4( -0.023226960, +1.087154378, -0.109964741, +6.333665763))
+        + dot( x2.xy, vec2( -11.640596589, +5.337625354 ) ),
+		dot( x1.xyzw, vec4( +0.010680993, +0.176613780, +1.638227448, -6.743522237))
+        + dot( x2.xy, vec2( +11.426396979, -5.523236379 ) ),
+		dot( x1.xyzw, vec4( -0.008260782, +2.244286052, +3.005587601, -24.279769818))
+        + dot( x2.xy, vec2( +32.484310068, -12.688259703 ) ) );
+}
+
 
 
 void main(void) {
     vec2 uv = gl_FragCoord.xy / resolution;
     vec3 col = vec3(0.0);
     
-    vec2 scrolluv = uv + vec2(0.0, fwidth(uv.y));
-    col = tx(scrolluv).rgb;
+    //vec2 scrolluv = uv + vec2(0.0, fwidth(uv.y)); // vertical scroll
+    vec2 scrolluv = uv + vec2(fwidth(uv.x), 0.0);  //horizontal scroll
 
-    vec2 fftuv = vec2(uv.x * 0.25, 0.0);
-    //vec2 fftuv = vec2(abs(uv.x - 0.5) * 1.0, 0.0); // symmetrical
+    vec2 fftuv = vec2(uv.y * 0.25, 0.5);
+    //vec2 fftuv = vec2(abs(uv.x - 0.5) * 1.0, 0.0); // symmetrical centered
+
     float fftval = texture2D(fft, fftuv).x;
     
-    vec3 fftcolor = plasma_quintic(fftval);
-    if (uv.y > 1.0 - fwidth(uv.y)) {
-        col = fftcolor * fftval * 2.;
-    } 
+    if (uv.x > 1.0 - fwidth(uv.x) && uv.x < 1.0) {
+        col = magma_quintic(fftval) ;
+    }
+    else {
+        col = tx(scrolluv).rgb;
+    }
 
     gl_FragColor = vec4(col, 1.0);
 }
