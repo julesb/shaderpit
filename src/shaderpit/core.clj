@@ -32,7 +32,7 @@
 (def global-pmouse (atom [0 0]))
 (def target-fps (atom 60))
 (def draw-info? (atom true))
-(def ^:const fft-bands 256)
+(def ^:const fft-bands 1024)
 (def ^:dynamic shaderpit)
 
 ; =========================================================================
@@ -156,6 +156,7 @@
         ml (get state :mouse-l [0.0 0.0])
         mc (get state :mouse-c [0.0 0.0])
         mr (get state :mouse-r [0.0 0.0])
+        rms (audio/get-input-rms)
         ]
     (.set shader "mouse" (float (mp 0)) (float (mp 1)))
     (.set shader "mouse_l" (float (ml 0)) (float (ml 1)))
@@ -169,7 +170,7 @@
 
     (.set shader "tex1" @gr)
     (.set shader "fft" @av/fft-tex)
-    (.set shader "rms" (float (audio/get-input-rms)))
+    (.set shader "rms" (float (rms 0)) (float (rms 1)))
     ; TODO viewport offset
     ; TODO viewport rotation
     ))
@@ -290,6 +291,7 @@
 
 
 (defn render-start! [state]
+  (audio/start)
   (when (= (state :camera-model) :3d)
     (center-cursor))
   (q/start-loop)
@@ -302,6 +304,7 @@
 
 
 (defn render-pause! [state]
+  (audio/stop)
   (q/no-loop)
   (q/cursor)
   (-> state
@@ -519,7 +522,7 @@
 
 (defn state-update [state]
   (console/update!)
-  (av/update-fft-tex (audio/get-fft-smooth ))
+  (av/update-fft-tex)
   (if (t/playing?)
     (-> state
         (handle-resize)
@@ -681,8 +684,8 @@
     (q/image @gr 0 0 (q/width) (q/height))
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     
-    (av/draw-fft 300 40 2048 400 )
-    (av/draw-input-level 20 (/ (q/height) 2) 30 200 rms)
+    (av/draw-fft-plot 320 40 2048 400 )
+    (av/draw-input-level 20 (/ (q/height) 2) 50 200 rms)
 
     (draw-info state 20 70)
     (when @draw-info?

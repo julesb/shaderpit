@@ -1,11 +1,6 @@
 (ns shaderpit.audio
-  (:import (processing.sound
-             Amplitude
-             AudioIn
-             BeatDetector
-             FFT
-             Waveform
-             )))
+  (:import (ddf.minim Minim AudioInput))
+  (:import (ddf.minim.analysis FFT)))
 
 ; Provides audio device input with analysis signals
 ; for input to visualizations:
@@ -14,44 +9,40 @@
 ; - TODO: Beat detection
 ; - TODO: Waveform
 
-
+(def ^:dynamic minim)
 (def ^:dynamic input)
 (def ^:dynamic fft)
 (def ^:dynamic fft-bands)
 (def ^:dynamic fft-spectrum)
 (def ^:dynamic rms)
 
-(def fft-smooth (atom 1.0)) ; FFT smooth factor 1 = no smoothing
+(def fft-smooth (atom 0.333)) ; FFT smooth factor 1 = no smoothing
 (def rms-smooth (atom 1.0)) ; RMS smooth factor 1 = no smoothing
 (def rms-sum (atom 0.0))     ; RMS running avg
 (def input-level (atom 1.0)) ; Input signal attenuation
 (def fft-smooth-vals (atom []))
 
 (defn init [parent device _fft-bands]
-  (def input (new AudioIn parent device))
-  (def rms (new Amplitude parent))
-  (def fft-bands _fft-bands)
-  (def fft (new FFT parent fft-bands))
-  (def fft-spectrum (float-array fft-bands, 0.0))
-  (.input rms input) ; patch the input to amplitude analyzer
-  (.input fft input) ; patch the input to FFT analyzer  )
-  (.amp input @input-level)
-)
+  (def minim (new Minim parent))
+  (def input (.getLineIn minim Minim/STEREO 2048))
+  (def fft (new FFT (.bufferSize input) (.sampleRate input)))
+  (def fft-bands (- (.specSize fft) 1 ))
+  (println "FFT bands:" fft-bands))
 
 
-(defn start [] (.start input))
+(defn start [] )
 
-(defn stop [] (.stop input))
+(defn stop [] )
 
 
-(defn set-input-level [level]
-  (reset! input-level level)
-  (.amp input level))
+;(defn set-input-level [level]
+;  (reset! input-level level)
+;  (.amp input level))
 
 
 ; update the running average rms and return it
 (defn get-input-rms []
-  (swap! rms-sum #(+ % (* (- (.analyze rms) %) @rms-smooth))))
+  [(.level (. input left)) (.level (. input right))])
 
 
 ; get or set the RMS smoothing factor
@@ -61,21 +52,24 @@
   @rms-smooth)
 
 
+(defn fft-forward []
+  (.forward fft (. input mix)))
 
 
-(defn get-fft [downscale]
-  (.analyze fft fft-spectrum)
-  (into [] (take (/ fft-bands downscale) fft-spectrum)))
-
+(defn get-fft []
+  (.forward fft (. input mix))
+  (into [] (map #(.getBand fft %) (range (.specSize fft))))
+  ;(into [] (take fft-bands (.getSpectrumReal fft)))
+  )
 
 (defn perceptual-scale [band mag]
   (let [rolloff 0.01]
-    (* 4.0 (* mag (+ rolloff (* (- 1.0 rolloff)
+    (* 1.0 (* mag (+ rolloff (* (- 1.0 rolloff)
                                 (Math/pow (/ band fft-bands) 0.6)))))))
 
 
-(defn get-fft-scaled [downscale]
-  (->> (get-fft downscale)
+(defn get-fft-scaled []
+  (->> (get-fft)
        (map-indexed perceptual-scale)
        (into [])))
 
@@ -87,7 +81,7 @@
 
 
 (defn get-fft-smooth []
-  (let [spectrum (get-fft-scaled 1)]
+  (let [spectrum (get-fft-scaled)]
     (reset! fft-smooth-vals (into [] (map-indexed smooth spectrum)))) )
 
 
