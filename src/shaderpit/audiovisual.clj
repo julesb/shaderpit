@@ -54,9 +54,9 @@
     (q/stroke-weight 1.0)
     (q/stroke 128 128 128 128)
     (q/rect x y w h)
-    (q/stroke-weight 3.0)
+    (q/stroke-weight 1.0)
     (q/stroke 255 255 255 255)
-    (q/begin-shape :points)
+    (q/begin-shape)
     (doseq [i (range texsize)]
       (let [idx (int (* i ))
             x1 (aget px idx)
