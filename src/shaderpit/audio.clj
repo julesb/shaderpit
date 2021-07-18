@@ -15,18 +15,25 @@
 (def ^:dynamic fft-bands)
 (def ^:dynamic fft-spectrum)
 (def ^:dynamic rms)
+(def ^:const fft-style :linear) ; :linear | :log-avg
 
 (def fft-smooth (atom 0.333)) ; FFT smooth factor 1 = no smoothing
 (def rms-smooth (atom 1.0)) ; RMS smooth factor 1 = no smoothing
 (def rms-sum (atom 0.0))     ; RMS running avg
 (def input-level (atom 1.0)) ; Input signal attenuation
 (def fft-smooth-vals (atom []))
-
-(defn init [parent device _fft-bands]
+(defn init [parent]
   (def minim (new Minim parent))
   (def input (.getLineIn minim Minim/STEREO 2048))
   (def fft (new FFT (.bufferSize input) (.sampleRate input)))
-  (def fft-bands (- (.specSize fft) 1 ))
+  (if (= fft-style :linear)
+    (do
+      (.noAverages fft)
+      (def fft-bands (- (.specSize fft) 1 )))
+    (do
+      (.logAverages fft 55 24)
+      (def fft-bands (.avgSize fft))))
+
   (println "FFT bands:" fft-bands))
 
 
@@ -58,8 +65,10 @@
 
 (defn get-fft []
   (.forward fft (. input mix))
-  (into [] (map #(.getBand fft %) (range (.specSize fft))))
-  ;(into [] (take fft-bands (.getSpectrumReal fft)))
+  (if (= fft-style :linear)
+    (into [] (map #(.getBand fft %) (range (.specSize fft))))
+    ;(into [] (take fft-bands (.getSpectrumReal fft)))
+    (into [] (map #(.getAvg fft %) (range (.avgSize fft)))))
   )
 
 (defn perceptual-scale [band mag]

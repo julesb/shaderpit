@@ -32,7 +32,6 @@
 (def global-pmouse (atom [0 0]))
 (def target-fps (atom 60))
 (def draw-info? (atom true))
-(def ^:const fft-bands 1024)
 (def ^:dynamic shaderpit)
 
 ; =========================================================================
@@ -75,7 +74,7 @@
 
 (defn setup []
   (console/init)
-  (audio/init shaderpit 0 fft-bands)
+  (audio/init shaderpit)
   (audio/start)
   ;(q/smooth)
   (q/no-cursor)
