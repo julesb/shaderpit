@@ -12,11 +12,6 @@ uniform vec2 resolution;
 uniform float time;
 uniform vec2 mouse;
 uniform float zoom;
-uniform float zrot;
-uniform float brightness;
-uniform float contrast;
-uniform float saturation;
-
 uniform sampler2D tex1;
 uniform sampler2D fft;
 uniform float rms;
@@ -91,13 +86,13 @@ void main(void) {
     //vec2 scrolluv = uv + vec2(0.0, fwidth(uv.y)); // vertical scroll
     vec2 scrolluv = uv + vec2(fwidth(uv.x), 0.0);  //horizontal scroll
 
-    vec2 fftuv = vec2(uv.y * 0.5, 0.5);
+    vec2 fftuv = vec2(uv.y * (1. - mouse.y), 0.5);
     //vec2 fftuv = vec2(abs(uv.x - 0.5) * 1.0, 0.0); // symmetrical centered
 
     
     if (uv.x > 1.0 - fwidth(uv.x) && uv.x < 1.0) {
         float fftval = texture2D(fft, fftuv).x;
-        col = magma_quintic(fftval) ;
+        col = inferno_quintic(fftval) ;
     }
     else {
         col = tx(scrolluv).rgb;
