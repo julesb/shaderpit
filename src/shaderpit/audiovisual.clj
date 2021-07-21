@@ -54,9 +54,9 @@
     (q/stroke-weight 1.0)
     (q/stroke 128 128 128 128)
     (q/rect x y w h)
-    (q/stroke-weight 1.0)
+    (q/stroke-weight 3.0)
     (q/stroke 255 255 255 255)
-    (q/begin-shape)
+    (q/begin-shape :points)
     (doseq [i (range texsize)]
       (let [idx (int (* i ))
             x1 (aget px idx)
@@ -83,5 +83,16 @@
                 (+ y h -1)
                 (+ x (/ i s))
                 (- (+ y h) (* sy h)))))))
+
+
+(defn draw-beats [x y w]
+  (q/fill 0 0 0 192)
+  (q/rect (- x (/ w 2)) (- y (/ w 2)) (* w 5) w (/ w 2))
+  (q/fill 255 0 0 (* @audio/beat-kick 255))
+  (q/ellipse (+ x (* 0 w)) y w w)
+  (q/fill 255 255 0 (* @audio/beat-snare 255))
+  (q/ellipse (+ x (* 2 w)) y w w)
+  (q/fill 0 0 255 (* @audio/beat-hat 255))
+  (q/ellipse (+ x (* 4 w)) y w w))
 
 

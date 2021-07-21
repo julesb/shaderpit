@@ -170,6 +170,10 @@
     (.set shader "tex1" @gr)
     (.set shader "fft" @av/fft-tex)
     (.set shader "rms" (float (rms 0)) (float (rms 1)))
+    (.set shader "beat_kick" (float @audio/beat-kick))
+    (.set shader "beat_snare" (float @audio/beat-snare))
+    (.set shader "beat_hat" (float @audio/beat-hat))
+
     ; TODO viewport offset
     ; TODO viewport rotation
     ))
@@ -521,6 +525,7 @@
 
 (defn state-update [state]
   (console/update!)
+  (audio/process)
   (av/update-fft-tex)
   (if (t/playing?)
     (-> state
@@ -683,8 +688,9 @@
     (q/image @gr 0 0 (q/width) (q/height))
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
     
-    (av/draw-fft-plot 320 40 2048 400 )
+    (av/draw-fft-plot 320 (- (q/height) 480) 2048 400 )
     (av/draw-input-level 20 (/ (q/height) 2) 50 200 rms)
+    (av/draw-beats 50 (+ (/ (q/height) 2) 260) 80)
 
     (draw-info state 20 70)
     (when @draw-info?
