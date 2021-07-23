@@ -61,10 +61,19 @@
     (spit statepath savestate)))
 
 
-
 (defn next-shader [state]
   (console/writeln (str "NEXT"))
   (let [newidx  (mod (inc (state :current-shader-idx))
+                     (count (state :shaders)))
+        nextshader ((get state :shaders) newidx) ]
+    (t/on-shader-change nextshader)
+    (-> (util/init-with-shaderdef nextshader)
+        (assoc :current-shader-idx newidx))))
+
+
+(defn prev-shader [state]
+  (console/writeln (str "PREV"))
+  (let [newidx  (mod (dec (state :current-shader-idx))
                      (count (state :shaders)))
         nextshader ((get state :shaders) newidx) ]
     (t/on-shader-change nextshader)
@@ -445,10 +454,14 @@
                 (util/clock-reset)
                 (assoc-in [:current-shader :shaderobj]
                           (q/load-shader (get-in state [:current-shader :path])))))
-    \/ (do
+    \. (do
          (if (t/recording?)
            state
            (next-shader state)))
+    \, (do
+         (if (t/recording?)
+           state
+           (prev-shader state)))
     \! (do
         (save-shader-state state (state :current-shader))
         state)
