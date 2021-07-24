@@ -19,7 +19,9 @@
 (def ^:dynamic fft-bands)
 (def ^:dynamic fft-spectrum)
 (def ^:dynamic rms)
+
 (def ^:const fft-style :linear) ; :linear | :log-avg
+(def ^:const fft-size 256)
 
 (def fft-smooth (atom 0.333)) ; FFT smooth factor 1 = no smoothing
 (def rms-smooth (atom 0.333)) ; RMS smooth factor 1 = no smoothing
@@ -40,8 +42,8 @@
 
 (defn init [parent]
   (def minim (new Minim parent))
-  (def input (.getLineIn minim Minim/STEREO 2048))
-  (def beat (new BeatDetect 2048 (.sampleRate input)))
+  (def input (.getLineIn minim Minim/STEREO fft-size))
+  (def beat (new BeatDetect fft-size (.sampleRate input)))
   (def fft (new FFT (.bufferSize input) (.sampleRate input)))
   (if (= fft-style :linear)
     (do
