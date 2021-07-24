@@ -54,7 +54,7 @@
     (q/stroke-weight 1.0)
     (q/stroke 128 128 128 128)
     (q/rect x y w h)
-    (q/stroke-weight 3.0)
+    (q/stroke-weight (/ 0.5 s))
     (q/stroke 255 255 255 255)
     (q/begin-shape :points)
     (doseq [i (range texsize)]
