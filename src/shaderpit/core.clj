@@ -84,7 +84,6 @@
 (defn setup []
   (console/init)
   (audio/init shaderpit)
-  (audio/start)
   ;(q/smooth)
   (q/no-cursor)
   (q/texture-mode :normal)
@@ -97,7 +96,6 @@
                                 :p2d))
 
   (util/glsl-watcher-init)
-  (av/init)
   (mtr/init)
   (mtr/init-graphics)
   (t/init)
@@ -164,7 +162,7 @@
         ml (get state :mouse-l [0.0 0.0])
         mc (get state :mouse-c [0.0 0.0])
         mr (get state :mouse-r [0.0 0.0])
-        rms (audio/get-input-rms)
+        rms (audio/get-rms)
         ]
     (.set shader "mouse" (float (mp 0)) (float (mp 1)))
     (.set shader "mouse_l" (float (ml 0)) (float (ml 1)))
@@ -177,11 +175,11 @@
     (.set shader "saturation" (float (get-in state [:saturation] 1.0)))
 
     (.set shader "tex1" @gr)
-    (.set shader "fft" @av/fft-tex)
+    (.set shader "fft" @audio/fft-tex)
     (.set shader "rms" (float (rms 0)) (float (rms 1)))
-    (.set shader "beat_kick" (float @audio/beat-kick))
-    (.set shader "beat_snare" (float @audio/beat-snare))
-    (.set shader "beat_hat" (float @audio/beat-hat))
+    (.set shader "beat_kick" (float (audio/get-kick)))
+    (.set shader "beat_snare" (float (audio/get-snare)))
+    (.set shader "beat_hat" (float (audio/get-hat)))
 
     ; TODO viewport offset
     ; TODO viewport rotation
@@ -303,7 +301,7 @@
 
 
 (defn render-start! [state]
-  (audio/start)
+  ;(audio/start)
   (when (= (state :camera-model) :3d)
     (center-cursor))
   (q/start-loop)
@@ -539,7 +537,6 @@
 (defn state-update [state]
   (console/update!)
   (audio/process)
-  (av/update-fft-tex)
   (if (t/playing?)
     (-> state
         (handle-resize)
@@ -681,7 +678,7 @@
         ar (get state :aspect-ratio 1.0)
         t-render-start (System/nanoTime)
         t (util/t-now state)
-        rms (audio/get-input-rms)
+        rms (audio/get-rms)
         ]
     (q/with-graphics @gr
       (q/texture-wrap :repeat)
