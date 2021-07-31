@@ -26,7 +26,7 @@
   :input-level 1.0
   :rms-smooth 0.333
   :fft {
-    :size 256
+    :size 512
     :style :linear ; :linear | :log-avg
     :smooth 0.333
   }
@@ -54,9 +54,8 @@
 })
 
 
-(defn start [state]
-  (let [;state @current-state
-        config (get state :config default-config)
+(defn- start-processing [state]
+  (let [config (get state :config)
         fft-size (get-in config [:fft :size])]
     (reset! input (.getLineIn minim Minim/STEREO fft-size))
     (reset! beat (new BeatDetect fft-size (.sampleRate @input)))
@@ -83,13 +82,18 @@
       newstate)))
 
 
-(defn stop [] )
+(defn start []
+  (swap! current-state assoc :processing? true))
+
+
+(defn stop []
+  (swap! current-state assoc :processing? false))
 
 
 (defn init [parent]
   (def minim (new Minim parent))
   (reset! current-state default-state)
-  (swap! current-state start)
+  (swap! current-state start-processing)
 )
 
 ;(defn set-input-level [level]
@@ -100,6 +104,12 @@
 
 (defn get-rms []
   (@current-state :rms))
+
+
+(defn get-db []
+  (let [rms (@current-state :rms)]
+    [(+ 100.0 (* (/ 20.0 2.302585092994) (Math/log (rms 0))))
+     (+ 100.0 (* (/ 20.0 2.302585092994) (Math/log (rms 1))))]))
 
 
 (defn get-kick []
@@ -156,18 +166,17 @@
                  (range (.avgSize (@fft 1)))))])
 
 
-(defn perceptual-scale [band mag nbands]
-  (let [rolloff 0.01]
-    (* 1.0 (* mag (+ rolloff (* (- 1.0 rolloff)
-                                (Math/pow (/ band nbands) 0.6)))))))
+(defn perceptual-scale [band mag nbands rolloff]
+  (* mag (+ rolloff (* (- 1.0 rolloff)
+                       (Math/pow (/ band nbands) 0.6)))))
 
 
-(defn get-fft-scaled []
-  (let [nbands (@current-state :fft-num-bands)
-        left ((@current-state :fft) 0)
-        right ((@current-state :fft) 1)]
-    [(into [] (map-indexed #(perceptual-scale %1 %2 nbands) left))
-     (into [] (map-indexed #(perceptual-scale %1 %2 nbands) right))]))
+(defn get-fft-scaled [state]
+  (let [nbands (state :fft-num-bands)
+        rolloff 0.01
+        [l r] (state :fft)]
+    [(into [] (map-indexed #(perceptual-scale %1 %2 nbands rolloff) l))
+     (into [] (map-indexed #(perceptual-scale %1 %2 nbands rolloff) r))]))
 
 
 (defn smooth [oldval newval s]
@@ -181,11 +190,8 @@
 
 
 (defn- update-fft-smooth [state]
-  (let [;fft (state :fft)
-        fft (get-fft-scaled)
-        ffts (state :fft-smooth)
-        ffts-l (ffts 0)
-        ffts-r (ffts 1)
+  (let [fft (get-fft-scaled state)
+        [ffts-l ffts-r] (state :fft-smooth)
         s (get-in state [:config :fft :smooth])
         left  (into [] (map-indexed #(smooth (get ffts-l %1 0) %2 s) (fft 0)))
         right (into [] (map-indexed #(smooth (get ffts-r %1 0) %2 s) (fft 1)))]
@@ -198,15 +204,15 @@
         ;fft (get-fft-scaled)
         fft (state :fft-smooth)
         spectrum-l (fft 0)
-        spectrum-r (fft 1)
-        ;spectrum-l ((state :fft) 0)
-        ;spectrum-r ((state :fft) 1)
-        ]
+        spectrum-r (fft 1)]
     (doseq [i (range texsize)]
       (let [ix (int (* i xscale))
             intensity-l (* (spectrum-l ix) 255.0)
             intensity-r (* (spectrum-r ix) 255.0)
-            col (q/color intensity-l intensity-r 0)]
+            intensity-d (+ 0.5 (* 0.5 (- (spectrum-r ix)
+                                         (spectrum-l ix))))
+            intensity-d (* intensity-d 255.0)
+            col (q/color intensity-l intensity-r intensity-d)]
         (q/set-pixel @fft-tex i 0 col)))
     (q/update-pixels @fft-tex)
     state))
@@ -248,14 +254,12 @@
 
 
 (defn process []
-  (swap! current-state
-         #(-> %
-              (update-rms)
-              (update-fft)
-              (update-fft-smooth)
-              ;(update-fft-tex)
-              (beat-detect)
-              ))
-  (update-fft-tex @current-state)
-  )
+  (when (@current-state :processing?)
+    (swap! current-state
+           #(-> %
+                (update-rms)
+                (update-fft)
+                (update-fft-smooth)
+                (update-fft-tex)
+                (beat-detect)))))
 
