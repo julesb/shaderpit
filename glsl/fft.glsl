@@ -91,8 +91,13 @@ void main(void) {
 
     
     if (uv.x > 1.0 - fwidth(uv.x) && uv.x < 1.0) {
-        float fftval = texture2D(fft, fftuv).x;
-        col = inferno_quintic(fftval) ;
+        vec3 fftval = texture2D(fft, fftuv).xyz;
+        fftval.z = abs(fftval.z - 0.5);
+        //fftval.z -= 0.5;
+        fftval.z *= 1.0;
+        col = fftval * 1.5;
+        //col = vec3(fftval, 0.);
+        //col = inferno_quintic(fftval) ;
     }
     else {
         col = tx(scrolluv).rgb;
