@@ -68,16 +68,13 @@
 
 
 (defn init []
-  (def ui-font (q/load-font "data/app/fonts/AmericanTypewriter-24.vlw"))
+  (def ui-font (q/load-font "data/app/fonts/FreeMono-16.vlw"))
   (reset! transport initial-transport)
  (console/writeln (str "transport: INIT: " @transport)))
 
 
 (defn init-graphics [w h]
-  (def ui-font (q/load-font "data/app/fonts/FreeMono-16.vlw"))
-  (swap! ctx assoc :gr (q/create-graphics w h :p2d))
-  
-  )
+  (swap! ctx assoc :gr (q/create-graphics w h :p2d)))
   
   
 
@@ -281,6 +278,7 @@
         tline-h 10
         prog-w (if (> nframes 0) (* (/ tline-w nframes) cur-frame-idx) 0)
         ]
+    (q/text-font ui-font)
     (q/fill 0 0 0 192)
     (q/with-translation [x y]
       (q/rect 0 0 w h)
