@@ -177,6 +177,7 @@
 
     (.set shader "tex1" @gr)
     (.set shader "fft" @audio/fft-tex)
+    (.set shader "fft_raw" @audio/fft-raw-tex)
     (.set shader "rms" (float (rms 0)) (float (rms 1)))
     (.set shader "beat_kick" (float (audio/get-kick)))
     (.set shader "beat_snare" (float (audio/get-snare)))

@@ -20,6 +20,7 @@
 
 (def current-state (atom nil))
 (def fft-tex (atom nil))
+(def fft-raw-tex (atom nil))
 
 
 (def default-config {
@@ -45,6 +46,7 @@
   :fft-num-bands 0
   :fft [[][]]
   :fft-smooth [[][]]
+  :fft-raw [[[][]][[][]]]
   :beat-kick 0.0
   :beat-snare 0.0
   :beat-hat 0.0
@@ -79,6 +81,7 @@
       (println "spec-size1" (.specSize (@fft 1)))
       (println "num bands" (newstate :fft-num-bands))
       (reset! fft-tex (q/create-image (newstate :fft-num-bands) 1 :rgb))
+      (reset! fft-raw-tex (q/create-image (newstate :fft-num-bands) 1 :argb))
       newstate)))
 
 
@@ -151,19 +154,19 @@
 (defn fft-linear [buffer]
   (.forward (@fft 0) (buffer 0))
   (.forward (@fft 1) (buffer 1))
-  [(into [] (map #(.getBand (@fft 0) %)
-                 (range (.specSize (@fft 0)))))
-   (into [] (map #(.getBand (@fft 1) %)
-                 (range (.specSize (@fft 1)))))])
+  [(vec (map #(.getBand (@fft 0) %)
+             (range (.specSize (@fft 0)))))
+   (vec (map #(.getBand (@fft 1) %)
+             (range (.specSize (@fft 1)))))])
 
 
 (defn get-fft-log [buffer]
   (.forward (@fft 0) buffer)
   (.forward (@fft 1) buffer)
-  [(into [] (map #(.getAvg (@fft 0) %)
-                 (range (.avgSize (@fft 0)))))
-   (into [] (map #(.getAvg (@fft 1) %)
-                 (range (.avgSize (@fft 1)))))])
+  [(vec (map #(.getAvg (@fft 0) %)
+             (range (.avgSize (@fft 0)))))
+   (vec (map #(.getAvg (@fft 1) %)
+             (range (.avgSize (@fft 1)))))])
 
 
 (defn perceptual-scale [band mag nbands rolloff]
@@ -175,8 +178,8 @@
   (let [nbands (state :fft-num-bands)
         rolloff 0.01
         [l r] (state :fft)]
-    [(into [] (map-indexed #(perceptual-scale %1 %2 nbands rolloff) l))
-     (into [] (map-indexed #(perceptual-scale %1 %2 nbands rolloff) r))]))
+    [(vec (map-indexed #(perceptual-scale %1 %2 nbands rolloff) l))
+     (vec (map-indexed #(perceptual-scale %1 %2 nbands rolloff) r))]))
 
 
 (defn smooth [oldval newval s]
@@ -189,12 +192,21 @@
     (assoc state :fft (fft-linear buffer))))
 
 
+(defn- update-fft-raw [state]
+  (let [tx #(vec (take (/ (count %) 2) %))
+        l [(tx (.getSpectrumReal (@fft 0)))
+           (tx (.getSpectrumImaginary (@fft 0)))]
+        r [(tx (.getSpectrumReal (@fft 1)))
+           (tx (.getSpectrumImaginary (@fft 1)))] ]
+    (assoc state :fft-raw [l r])))
+
+
 (defn- update-fft-smooth [state]
   (let [fft (get-fft-scaled state)
         [ffts-l ffts-r] (state :fft-smooth)
         s (get-in state [:config :fft :smooth])
-        left  (into [] (map-indexed #(smooth (get ffts-l %1 0) %2 s) (fft 0)))
-        right (into [] (map-indexed #(smooth (get ffts-r %1 0) %2 s) (fft 1)))]
+        left  (vec (map-indexed #(smooth (get ffts-l %1 0) %2 s) (fft 0)))
+        right (vec (map-indexed #(smooth (get ffts-r %1 0) %2 s) (fft 1)))]
     (assoc state :fft-smooth [left right])))
 
 
@@ -215,6 +227,23 @@
             col (q/color intensity-l intensity-r intensity-d)]
         (q/set-pixel @fft-tex i 0 col)))
     (q/update-pixels @fft-tex)
+    state))
+
+
+(defn- update-fft-raw-tex [state]
+  (let [texsize (.width @fft-raw-tex)
+        xscale (/ (float (state :fft-num-bands)) texsize)
+        [[lr li] [rr ri]] (state :fft-raw) ]
+    (doseq [i (range texsize)]
+      (let [ix (int (* i xscale))
+            txr #(+ 127.0 (* % 128.0 0.5))
+            txi #(+ 127.0 (* (/ % Math/PI) 128.0 0.5))
+            col (q/color (txr (lr ix))
+                         (txi (li ix))
+                         (txr (rr ix))
+                         (txi (ri ix)))]
+        (q/set-pixel @fft-raw-tex i 0 col)))
+    (q/update-pixels @fft-raw-tex)
     state))
 
 
@@ -253,6 +282,7 @@
           (detect-hat t)))))
 
 
+
 (defn process []
   (when (@current-state :processing?)
     (swap! current-state
@@ -260,6 +290,8 @@
                 (update-rms)
                 (update-fft)
                 (update-fft-smooth)
+                (update-fft-raw)
                 (update-fft-tex)
+                (update-fft-raw-tex)
                 (beat-detect)))))
 
