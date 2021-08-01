@@ -3,7 +3,7 @@
             [shaderpit.util :as util]
             [quil.core :as q]
             )
-  (:import (ddf.minim Minim AudioInput))
+  (:import (ddf.minim Minim AudioInput AudioListener))
   (:import (ddf.minim.analysis FFT BeatDetect)))
 
 ; Provides audio device input with analysis signals
@@ -41,7 +41,7 @@
 (def default-state {
   :processing? false
   :config default-config
-  :audio-buffer nil
+  :buffer nil
   :rms [0.0 0.0]
   :fft-num-bands 0
   :fft [[][]]
@@ -56,48 +56,6 @@
 })
 
 
-(defn- start-processing [state]
-  (let [config (get state :config)
-        fft-size (get-in config [:fft :size])]
-    (reset! input (.getLineIn minim Minim/STEREO fft-size))
-    (reset! beat (new BeatDetect fft-size (.sampleRate @input)))
-    (reset! fft [(new FFT (.bufferSize @input) (.sampleRate @input))
-                 (new FFT (.bufferSize @input) (.sampleRate @input))])
-    (when (= (config :fft-style) :linear)
-      (.noAverages (@fft 0))
-      (.noAverages (@fft 1)))
-    (when (= (config :fft-style) :log-avg)
-      (.logAverages (@fft 0) 55 24)
-      (.logAverages (@fft 1) 55 24))
-
-    (let [newstate (-> state
-                   (assoc :processing? true)
-                   (assoc :fft-num-bands
-                     (if (= (get-in config [:fft :style]) :linear)
-                       (- (.specSize (@fft 0)) 1 )
-                       (.avgSize (@fft 0)))))]
-      (println "buffer size" (.bufferSize @input))
-      (println "spec-size0" (.specSize (@fft 0)))
-      (println "spec-size1" (.specSize (@fft 1)))
-      (println "num bands" (newstate :fft-num-bands))
-      (reset! fft-tex (q/create-image (newstate :fft-num-bands) 1 :rgb))
-      (reset! fft-raw-tex (q/create-image (newstate :fft-num-bands) 1 :argb))
-      newstate)))
-
-
-(defn start []
-  (swap! current-state assoc :processing? true))
-
-
-(defn stop []
-  (swap! current-state assoc :processing? false))
-
-
-(defn init [parent]
-  (def minim (new Minim parent))
-  (reset! current-state default-state)
-  (swap! current-state start-processing)
-)
 
 ;(defn set-input-level [level]
 ;  (reset! input-level level)
@@ -187,9 +145,7 @@
 
 
 (defn- update-fft [state]
-  (let [buffer [(.toArray (.left @input))
-                (.toArray (.right @input))]]
-    (assoc state :fft (fft-linear buffer))))
+    (assoc state :fft (fft-linear (state :buffer))))
 
 
 (defn- update-fft-raw [state]
@@ -284,14 +240,67 @@
 
 
 (defn process []
-  (when (@current-state :processing?)
-    (swap! current-state
-           #(-> %
-                (update-rms)
-                (update-fft)
-                (update-fft-smooth)
-                (update-fft-raw)
-                (update-fft-tex)
-                (update-fft-raw-tex)
-                (beat-detect)))))
+  (update-fft-tex @current-state)
+  (update-fft-raw-tex @current-state))
 
+
+(defn audio-buffer-callback []
+  (reify AudioListener
+    (samples [this sampL sampR]
+      (when (and (@current-state :processing?)
+                 (not (nil? sampL))
+                 (not (nil? sampR)))
+        (swap! current-state
+               #(-> %
+                    (assoc :buffer [sampL sampR])
+                    (update-rms)
+                    (update-fft)
+                    (update-fft-smooth)
+                    (update-fft-raw)
+                    (beat-detect)))))))
+
+
+(defn- start-processing [state]
+  (let [config (get state :config)
+        fft-size (get-in config [:fft :size])]
+    (reset! input (.getLineIn minim Minim/STEREO fft-size))
+    (reset! beat (new BeatDetect fft-size (.sampleRate @input)))
+    (reset! fft [(new FFT (.bufferSize @input) (.sampleRate @input))
+                 (new FFT (.bufferSize @input) (.sampleRate @input))])
+    (when (= (config :fft-style) :linear)
+      (.noAverages (@fft 0))
+      (.noAverages (@fft 1)))
+    (when (= (config :fft-style) :log-avg)
+      (.logAverages (@fft 0) 55 24)
+      (.logAverages (@fft 1) 55 24))
+
+    (.addListener @input (audio-buffer-callback))
+
+    (let [newstate (-> state
+                   (assoc :processing? true)
+                   (assoc :fft-num-bands
+                     (if (= (get-in config [:fft :style]) :linear)
+                       (- (.specSize (@fft 0)) 1 )
+                       (.avgSize (@fft 0)))))]
+      (println "buffer size" (.bufferSize @input))
+      (println "spec-size0" (.specSize (@fft 0)))
+      (println "spec-size1" (.specSize (@fft 1)))
+      (println "num bands" (newstate :fft-num-bands))
+      (reset! fft-tex (q/create-image (newstate :fft-num-bands) 1 :rgb))
+      (reset! fft-raw-tex (q/create-image (newstate :fft-num-bands) 1 :argb))
+      newstate)))
+
+
+(defn start []
+  (swap! current-state assoc :processing? true))
+
+
+(defn stop []
+  (swap! current-state assoc :processing? false))
+
+
+(defn init [parent]
+  (def minim (new Minim parent))
+  (reset! current-state default-state)
+  (swap! current-state start-processing)
+)
