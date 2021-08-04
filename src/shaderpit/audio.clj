@@ -109,6 +109,13 @@
   (get-in @current-state [:config :fft :smooth]))
 
 
+
+(defn- fft-set-window [w]
+  (.window (@fft 0) w)
+  (.window (@fft 1) w)
+  )
+
+
 (defn fft-linear [buffer]
   (.forward (@fft 0) (buffer 0))
   (.forward (@fft 1) (buffer 1))
@@ -118,9 +125,9 @@
              (range (.specSize (@fft 1)))))])
 
 
-(defn get-fft-log [buffer]
-  (.forward (@fft 0) buffer)
-  (.forward (@fft 1) buffer)
+(defn fft-log [buffer]
+  (.forward (@fft 0) (buffer 0))
+  (.forward (@fft 1) (buffer 1))
   [(vec (map #(.getAvg (@fft 0) %)
              (range (.avgSize (@fft 0)))))
    (vec (map #(.getAvg (@fft 1) %)
@@ -145,7 +152,9 @@
 
 
 (defn- update-fft [state]
-    (assoc state :fft (fft-linear (state :buffer))))
+  (if (= :linear (get-in state [:config :fft :style]))
+    (assoc state :fft (fft-linear (state :buffer)))
+    (assoc state :fft (fft-log (state :buffer)))))
 
 
 (defn- update-fft-raw [state]
@@ -240,8 +249,9 @@
 
 
 (defn process []
-  (update-fft-tex @current-state)
-  (update-fft-raw-tex @current-state))
+  (when (@current-state :processing?)
+    (update-fft-tex @current-state)
+    (update-fft-raw-tex @current-state)))
 
 
 (defn audio-buffer-callback []
@@ -262,17 +272,19 @@
 
 (defn- start-processing [state]
   (let [config (get state :config)
-        fft-size (get-in config [:fft :size])]
+        fft-size (get-in config [:fft :size])
+        fft-style (get-in config [:fft :style])]
     (reset! input (.getLineIn minim Minim/STEREO fft-size))
     (reset! beat (new BeatDetect fft-size (.sampleRate @input)))
     (reset! fft [(new FFT (.bufferSize @input) (.sampleRate @input))
                  (new FFT (.bufferSize @input) (.sampleRate @input))])
-    (when (= (config :fft-style) :linear)
+    (fft-set-window FFT/HAMMING)
+    (when (= fft-style :linear)
       (.noAverages (@fft 0))
       (.noAverages (@fft 1)))
-    (when (= (config :fft-style) :log-avg)
-      (.logAverages (@fft 0) 55 24)
-      (.logAverages (@fft 1) 55 24))
+    (when (= fft-style :log-avg)
+      (.logAverages (@fft 0) 10 48)
+      (.logAverages (@fft 1) 10 48))
 
     (.addListener @input (audio-buffer-callback))
 
@@ -288,6 +300,7 @@
       (println "num bands" (newstate :fft-num-bands))
       (reset! fft-tex (q/create-image (newstate :fft-num-bands) 1 :rgb))
       (reset! fft-raw-tex (q/create-image (newstate :fft-num-bands) 1 :argb))
+
       newstate)))
 
 
