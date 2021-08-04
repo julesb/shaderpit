@@ -30,6 +30,7 @@
     :size 512
     :style :linear ; :linear | :log-avg
     :smooth 0.333
+    :window :hamming
   }
   :beat-detect {
     :t-debounce-kick 375000000
@@ -110,10 +111,22 @@
 
 
 
-(defn- fft-set-window [w]
-  (.window (@fft 0) w)
-  (.window (@fft 1) w)
-  )
+(defn fft-set-window [w]
+  (let [windows {
+          :bartlett FFT/BARTLETT
+          :blackman FFT/BLACKMAN
+          :cosine FFT/COSINE
+          :gauss FFT/GAUSS
+          :hamming FFT/HAMMING
+          :hann FFT/HANN
+          :lanczos FFT/LANCZOS
+          :none FFT/NONE
+          :triangular FFT/TRIANGULAR
+        }
+        window (get windows w FFT/NONE)]
+    (swap! current-state update-in [:config :fft :window] w)
+    (.window (@fft 0) window)
+    (.window (@fft 1) window)))
 
 
 (defn fft-linear [buffer]
@@ -273,20 +286,19 @@
 (defn- start-processing [state]
   (let [config (get state :config)
         fft-size (get-in config [:fft :size])
-        fft-style (get-in config [:fft :style])]
+        fft-style (get-in config [:fft :style])
+        fft-win (get-in config [:fft :window])]
     (reset! input (.getLineIn minim Minim/STEREO fft-size))
     (reset! beat (new BeatDetect fft-size (.sampleRate @input)))
     (reset! fft [(new FFT (.bufferSize @input) (.sampleRate @input))
                  (new FFT (.bufferSize @input) (.sampleRate @input))])
-    (fft-set-window FFT/HAMMING)
+    (fft-set-window :hamming)
     (when (= fft-style :linear)
       (.noAverages (@fft 0))
       (.noAverages (@fft 1)))
     (when (= fft-style :log-avg)
       (.logAverages (@fft 0) 10 48)
       (.logAverages (@fft 1) 10 48))
-
-    (.addListener @input (audio-buffer-callback))
 
     (let [newstate (-> state
                    (assoc :processing? true)
@@ -300,6 +312,7 @@
       (println "num bands" (newstate :fft-num-bands))
       (reset! fft-tex (q/create-image (newstate :fft-num-bands) 1 :rgb))
       (reset! fft-raw-tex (q/create-image (newstate :fft-num-bands) 1 :argb))
+      (.addListener @input (audio-buffer-callback))
 
       newstate)))
 
