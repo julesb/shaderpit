@@ -292,13 +292,15 @@
     (reset! beat (new BeatDetect fft-size (.sampleRate @input)))
     (reset! fft [(new FFT (.bufferSize @input) (.sampleRate @input))
                  (new FFT (.bufferSize @input) (.sampleRate @input))])
-    (fft-set-window :hamming)
+    ;(fft-set-window :hamming)
+    (.window (@fft 0) FFT/HAMMING)
+    (.window (@fft 1) FFT/HAMMING)
     (when (= fft-style :linear)
       (.noAverages (@fft 0))
       (.noAverages (@fft 1)))
     (when (= fft-style :log-avg)
-      (.logAverages (@fft 0) 10 48)
-      (.logAverages (@fft 1) 10 48))
+      (.logAverages (@fft 0) 22 96)
+      (.logAverages (@fft 1) 22 96))
 
     (let [newstate (-> state
                    (assoc :processing? true)
