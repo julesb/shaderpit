@@ -10,7 +10,8 @@
         mh rmss ;(min rmss h)
         my (- (+ y h) mh )
         col (if (> rmss h) [255 0 0 128] [0 255 0 128]) ]
-    (q/no-fill)
+    ;(q/no-fill)
+    (q/fill 0 0 0 128)
     (q/stroke-weight 1)
     (q/stroke 128 128 128 128)
     (q/rect x y w h)
@@ -37,8 +38,8 @@
     (q/stroke-weight 1.0)
     (q/stroke 128 128 128 128)
     (q/rect x y w h)
-    (q/stroke-weight (max (/ 0.5 s) 2))
-
+    ;(q/stroke-weight (+ 1 (max (/ 0.5 s) 2)))
+    (q/stroke-weight 4)
     (q/stroke 0 0 255 255)
     (q/begin-shape :points)
     (doseq [i (range texsize)]
@@ -90,19 +91,22 @@
 ;                (+ x (/ i s))
 ;                (- (+ y h) (* sy h)))))))
 
-
-(defn draw-beats [x y w]
+(defn draw-beats [x y w h]
   (let [margin 20
-        w2 (- w margin)]
-  (q/stroke-weight 1.0)
-  (q/stroke 128 128 128 128)
-  (q/fill 0 0 0 192)
-  (q/rect (- x (/ w 2)) (- y (/ w 2)) (* w 5) w (* w 2))
-  (q/fill 255 0 0 (* (audio/get-kick) 255))
-  (q/ellipse (+ x (* 0 w)) y w2 w2)
-  (q/fill 255 255 0 (* (audio/get-snare) 255))
-  (q/ellipse (+ x (* 2 w)) y w2 w2)
-  (q/fill 0 0 255 (* (audio/get-hat) 255))
-  (q/ellipse (+ x (* 4 w)) y w2 w2)))
-
+        d (- w margin)
+        c (/ w 2)
+        y1 c
+        y3 (- h c)
+        y2 (/ (+ y1 y3) 2) ]
+    (q/with-translation [x y]
+      (q/stroke-weight 1.0)
+      (q/stroke 128 128 128 128)
+      (q/fill 0 0 0 192)
+      (q/rect 0 0 w h)
+      (q/fill 255 255 0 (* (audio/get-snare) 255))
+      (q/ellipse c y2 d d)
+      (q/fill 0 0 255 (* (audio/get-hat) 255))
+      (q/ellipse c y1 d d)
+      (q/fill 255 0 0 (* (audio/get-kick) 255))
+      (q/ellipse c y3 d d))))
 
