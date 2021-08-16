@@ -684,6 +684,7 @@
         t-render-start (System/nanoTime)
         t (util/t-now state)
         rms (audio/get-rms)
+        [ax ay] [400 20]
         ]
     (q/with-graphics @gr
       (q/texture-wrap :repeat)
@@ -702,14 +703,15 @@
     (q/reset-shader)
     (q/image @gr 0 0 (q/width) (q/height))
     (mtr/capture :t-render (double (/ (- (System/nanoTime) t-render-start) 1000000000)))
+
     (when @draw-info-audio?
-      (av/draw-input-level 20 (/ (q/height) 2) 50 200 rms)
-      (av/draw-fft-plot (- (q/width) 2048 20) (- (q/height) 480) 2048 400 )
-      (av/draw-beats 50 (+ (/ (q/height) 2) 260) 80))
+      (av/draw-input-level ax ay 50 256 rms)
+      (av/draw-fft-plot (+ ax 100 20) ay 2048 256 )
+      (av/draw-beats (+ ax 50 10) ay 50 256)
+      )
 
     (draw-info state 20 70)
     (when @draw-info?
-
       ;(mtr/draw-all (- (q/width) mtr/width 20) 20)
       (t/draw-ui (/ (q/width) 2) 40, t)
       (q/fill 255)
