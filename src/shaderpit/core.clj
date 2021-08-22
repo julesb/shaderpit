@@ -164,6 +164,8 @@
         mc (get state :mouse-c [0.0 0.0])
         mr (get state :mouse-r [0.0 0.0])
         rms (audio/get-rms)
+        variance (audio/get-variance)
+        energy (audio/get-energy)
         ]
     (.set shader "mouse" (float (mp 0)) (float (mp 1)))
     (.set shader "mouse_l" (float (ml 0)) (float (ml 1)))
@@ -182,6 +184,8 @@
     (.set shader "beat_kick" (float (audio/get-kick)))
     (.set shader "beat_snare" (float (audio/get-snare)))
     (.set shader "beat_hat" (float (audio/get-hat)))
+    (.set shader "variance" (float (variance 0)) (float (variance 1)))
+    (.set shader "energy" (float (energy 0)) (float (energy 1)))
 
     ; TODO viewport offset
     ; TODO viewport rotation

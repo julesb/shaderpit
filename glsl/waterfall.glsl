@@ -12,7 +12,9 @@ uniform vec2 mouse;
 uniform float zoom;
 uniform sampler2D tex1;
 uniform sampler2D fft;
-uniform float rms;
+uniform vec2 rms;
+uniform vec2 variance;
+uniform vec2 energy;
 
 vec4 prev_frame(in vec2 p){ return texture2D(tex1, p); }
 
@@ -28,6 +30,42 @@ vec3 inferno(float t) {
     return c0+t*(c1+t*(c2+t*(c3+t*(c4+t*(c5+t*c6)))));
 }
 
+float sdSegment( in vec2 p, in vec2 a, in vec2 b ) {
+    vec2 pa = p-a, ba = b-a;
+    float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+    return length( pa - ba*h );
+}
+
+
+vec3 energy_meter(vec2 uv) {
+    float vscale = 1.0;
+    vec2 origin = vec2(0.5, 1.- fwidth(uv)*20.);
+    vec2 vs = abs(rms * vscale);
+    vec2 l = origin - vec2(vs.x*vscale, 0.0);
+    vec2 r = origin + vec2(vs.y*vscale, 0.0);
+    float dl = sdSegment(uv, origin, l);
+    float dr = sdSegment(uv, origin, r);
+    float ll = smoothstep(0.005, 0.0, dl);
+    float lr = smoothstep(0.005, 0.0, dr);
+    //vec3 cl = vec3(ll);
+    //vec3 cr = vec3(lr);
+    return vec3(ll + lr) * 0.5;
+}
+
+vec3 variance_meter(vec2 uv) {
+    float vscale = 2.0;
+    vec2 origin = vec2(0.5, 1.- fwidth(uv)*40.);
+    vec2 vs = variance * vscale;
+    vec2 l = origin - vec2(vs.x*vscale, 0.0);
+    vec2 r = origin + vec2(vs.y*vscale, 0.0);
+    float dl = sdSegment(uv, origin, l);
+    float dr = sdSegment(uv, origin, r);
+    float ll = smoothstep(0.005, 0.0, dl);
+    float lr = smoothstep(0.005, 0.0, dr);
+    return vec3(ll + lr) * 0.5;
+    //return cl + cr;
+
+}
 
 vec4 fft_os(vec2 uv) {
     return 0.5  * texture2D(fft, abs(uv))
@@ -80,6 +118,8 @@ void main(void) {
         }
     }
 
+    col += energy_meter(uv);
+    col += variance_meter(uv);
     // separator line
     //col += abs(uv.y - plotminy-pixsize.y) < pixsize.y ? 0.2: 0.0;
     gl_FragColor = vec4(col, 1.0);

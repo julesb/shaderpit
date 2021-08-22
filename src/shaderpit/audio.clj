@@ -29,7 +29,7 @@
   :fft {
     :size 512
     :style :linear ; :linear | :log-avg
-    :smooth 0.333
+    :smooth 0.2
     :window :hamming
   }
   :beat-detect {
@@ -48,6 +48,8 @@
   :fft [[][]]
   :fft-smooth [[][]]
   :fft-raw [[[][]][[][]]]
+  :variance [0.0 0.0]
+  :energy [0.0 0.0]
   :beat-kick 0.0
   :beat-snare 0.0
   :beat-hat 0.0
@@ -84,6 +86,14 @@
 
 (defn get-hat []
   (@current-state :beat-hat))
+
+
+(defn get-energy []
+  (@current-state :energy))
+
+
+(defn get-variance []
+  (@current-state :variance))
 
 
 (defn- update-rms [state]
@@ -225,6 +235,32 @@
     state))
 
 
+
+(defn update-energy [state]
+  (let [[buf-l buf-r] (state :buffer)
+        [old-l old-r] (state :energy)
+        sm 0.05
+        av-l (/ (reduce + buf-l) (max (count buf-l) 1))
+        av-r (/ (reduce + buf-r) (max (count buf-r) 1))
+        sm-l (smooth old-l av-l sm)
+        sm-r (smooth old-r av-r sm) ]
+    (assoc state :energy [sm-l sm-r])))
+
+
+(defn update-variance [state]
+  (let [[buf-l buf-r] (state :buffer)
+        [old-l old-r] (state :variance)
+        [en-l en-r] (state :energy)
+        sm 0.1
+        va-l (reduce + (map #(Math/pow (- % en-l) 2.0) buf-l))
+        va-r (reduce + (map #(Math/pow (- % en-r) 2.0) buf-r))
+        va-l (/ va-l (count buf-l))
+        va-r (/ va-r (count buf-r))
+        sm-l (smooth old-l va-l sm)
+        sm-r (smooth old-r va-r sm) ]
+    (assoc state :variance [sm-l sm-r])))
+
+
 (defn- beat-detect [state]
   (.detect @beat (.mix @input))
   (let [t (System/nanoTime)
@@ -277,6 +313,8 @@
                #(-> %
                     (assoc :buffer [sampL sampR])
                     (update-rms)
+                    (update-energy)
+                    (update-variance)
                     (update-fft)
                     (update-fft-smooth)
                     (update-fft-raw)
