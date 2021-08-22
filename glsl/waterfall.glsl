@@ -2,6 +2,7 @@
 
 #define  PI 3.1415927
 #define TAU 6.2831853
+#define colormap inferno
 
 varying vec4 vertTexCoord;
 uniform float aspect_ratio;
@@ -14,23 +15,18 @@ uniform sampler2D fft;
 uniform float rms;
 
 vec4 prev_frame(in vec2 p){ return texture2D(tex1, p); }
-float saturate( float x ) { return clamp( x, 0.0, 1.0 ); }
 
-// palettes from https://www.shadertoy.com/view/XtGGzG
-vec3 inferno_quintic( float x )
-{
-	x = saturate( x );
-	vec4 x1 = vec4( 1.0, x, x * x, x * x * x ); // 1 x x2 x3
-	vec4 x2 = x1 * x1.w * x; // x4 x5 x6 x7
-	return vec3(
-		dot( x1.xyzw, vec4( -0.027780558, +1.228188385, +0.278906882, +3.892783760 ) )
-        + dot( x2.xy, vec2( -8.490712758, +4.069046086 ) ),
-		dot( x1.xyzw, vec4( +0.014065206, +0.015360518, +1.605395918, -4.821108251 ) )
-        + dot( x2.xy, vec2( +8.389314011, -4.193858954 ) ),
-		dot( x1.xyzw, vec4( -0.019628385, +3.122510347, -5.893222355, +2.798380308 ) )
-        + dot( x2.xy, vec2( -3.608884658, +4.324996022 ) ) );
+// colormap from https://www.shadertoy.com/view/WlfXRN
+vec3 inferno(float t) {
+    const vec3 c0 = vec3(0.00021894036911922, 0.0016510046310010, -0.019480898437091);
+    const vec3 c1 = vec3(0.1065134194856116, 0.5639564367884091, 3.932712388889277);
+    const vec3 c2 = vec3(11.60249308247187, -3.972853965665698, -15.9423941062914);
+    const vec3 c3 = vec3(-41.70399613139459, 17.43639888205313, 44.35414519872813);
+    const vec3 c4 = vec3(77.162935699427, -33.40235894210092, -81.80730925738993);
+    const vec3 c5 = vec3(-71.31942824499214, 32.62606426397723, 73.20951985803202);
+    const vec3 c6 = vec3(25.13112622477341, -12.24266895238567, -23.07032500287172);
+    return c0+t*(c1+t*(c2+t*(c3+t*(c4+t*(c5+t*c6)))));
 }
-
 
 
 vec4 fft_os(vec2 uv) {
@@ -44,12 +40,17 @@ vec3 fft_plot(vec2 uv, float fftval, float height) {
     float breathingspace = 0.9;
     float doty = 1. - height + fftval * breathingspace * height;
     vec2 dotpos = vec2(uv.x, doty);
+    dotpos.y += fwidth(uv.y)*2.;
     float d = distance(uv, dotpos);
-    //d = uv.y < dotpos.y? 0.: d; // fill below
+    d = uv.y < dotpos.y? 0.: d; // fill below
     //float intensity = pow(1. - d, 64.); // exp dot
-    float intensity = (d < fwidth(uv.y)*1.)? 0.125: 0.0; // pixel
+    float intensity = pow(d, 0.00005); // exp dot
+    //float intensity = (d < fwidth(uv.y)*1.)? 0.125: 0.0; // pixel
     float topdot = abs(uv.y - dotpos.y) < fwidth(uv.x)*1. ? 1.0: 0.0;
-    return inferno_quintic(fftval) * intensity + topdot;
+    //topdot *= smoothstep(0., 0.1, fftval);
+    //return inferno(fftval) + vec3(topdot);
+    vec3 col = colormap(fftval) * intensity + topdot;
+    return col;
 }
 
 void main(void) {
@@ -60,7 +61,8 @@ void main(void) {
 
     vec2 scrolluv = uv + vec2(0.0, fwidth(uv.y)); // vertical scroll
     vec2 fftuv = vec2((uv.x - 0.5) * 2.0, 0.0); // symmetrical centered
-    vec4 ft = fft_os(fftuv);
+    fftuv.x = clamp(fftuv.x, -0.99, 0.99); // prevent sampling tex edges
+    vec4 ft = fft_os(abs(fftuv));
     float fftval = (uv.x < 0.5)? ft.x : ft.y;
     
     vec3 col = vec3(0.0);
@@ -70,8 +72,8 @@ void main(void) {
     }
     else {
         // waterfall
-        if (uv.y > plotminy - fwidth(uv.y) && uv.y < plotminy) {
-            col = inferno_quintic(fftval);
+        if (uv.y > plotminy - fwidth(uv.y)*2. && uv.y < plotminy) {
+            col = colormap(fftval);
         }
         else {
             col = prev_frame(scrolluv).rgb;
@@ -79,8 +81,7 @@ void main(void) {
     }
 
     // separator line
-    col += abs(uv.y - plotminy-pixsize.y) < pixsize.y ? 0.1: 0.0;
-
+    //col += abs(uv.y - plotminy-pixsize.y) < pixsize.y ? 0.2: 0.0;
     gl_FragColor = vec4(col, 1.0);
 }
 
