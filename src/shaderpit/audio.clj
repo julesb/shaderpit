@@ -27,7 +27,7 @@
   :input-level 1.0
   :rms-smooth 0.333
   :fft {
-    :size 512
+    :size 1024
     :style :linear ; :linear | :log-avg
     :smooth 0.2
     :window :hamming
@@ -37,6 +37,7 @@
     :t-debounce-snare 375000000
     :t-debounce-hat 50000000
   }
+  :energy-history-size 43
 })
 
 (def default-state {
@@ -50,6 +51,8 @@
   :fft-raw [[[][]][[][]]]
   :variance [0.0 0.0]
   :energy [0.0 0.0]
+  :energy-history [[0 0] [0 0]]
+  :energy-history-avg [0.0 0.0]
   :beat-kick 0.0
   :beat-snare 0.0
   :beat-hat 0.0
@@ -89,7 +92,8 @@
 
 
 (defn get-energy []
-  (@current-state :energy))
+  ;(@current-state :energy))
+  (@current-state :energy-history-avg))
 
 
 (defn get-variance []
@@ -120,6 +124,11 @@
   (get-in @current-state [:config :fft :smooth]))
 
 
+(defn config-energy-history-size [& size]
+  (when size
+    (swap! current-state assoc-in [:config :energy-history-size](first size)))
+  (get-in @current-state [:config :energy-history-size]))
+
 
 (defn fft-set-window [w]
   (let [windows {
@@ -134,7 +143,7 @@
           :triangular FFT/TRIANGULAR
         }
         window (get windows w FFT/NONE)]
-    (swap! current-state update-in [:config :fft :window] w)
+    (swap! current-state assoc-in [:config :fft :window] w)
     (.window (@fft 0) window)
     (.window (@fft 1) window)))
 
@@ -235,30 +244,34 @@
     state))
 
 
-
 (defn update-energy [state]
   (let [[buf-l buf-r] (state :buffer)
-        [old-l old-r] (state :energy)
-        sm 0.05
-        av-l (/ (reduce + buf-l) (max (count buf-l) 1))
-        av-r (/ (reduce + buf-r) (max (count buf-r) 1))
-        sm-l (smooth old-l av-l sm)
-        sm-r (smooth old-r av-r sm) ]
-    (assoc state :energy [sm-l sm-r])))
+        histsize (get-in state [:config :energy-history-size])
+        en-l (reduce + (map #(* % %) buf-l))
+        en-r (reduce + (map #(* % %) buf-r))
+        ;en-l (/ (reduce + (map #(* % %) buf-l)) (count buf-l))
+        ;en-r (/ (reduce + (map #(* % %) buf-r)) (count buf-r))
+        histnew  (->> (state :energy-history)
+                      (concat [[en-l en-r]])
+                      (take histsize))
+        histavg (v2/scale (reduce v2/add (map v2/sqr histnew))
+                          (/ 1.0 histsize)) ]
+    (-> state
+        (assoc :energy [en-l en-r])
+        (assoc :energy-history histnew)
+        (assoc :energy-history-avg histavg))))
 
 
 (defn update-variance [state]
-  (let [[buf-l buf-r] (state :buffer)
-        [old-l old-r] (state :variance)
-        [en-l en-r] (state :energy)
-        sm 0.1
-        va-l (reduce + (map #(Math/pow (- % en-l) 2.0) buf-l))
-        va-r (reduce + (map #(Math/pow (- % en-r) 2.0) buf-r))
-        va-l (/ va-l (count buf-l))
-        va-r (/ va-r (count buf-r))
-        sm-l (smooth old-l va-l sm)
-        sm-r (smooth old-r va-r sm) ]
-    (assoc state :variance [sm-l sm-r])))
+  (let [histsize (get-in state [:config :energy-history-size])
+        oldv (state :variance)
+        newv (v2/scale (reduce v2/add
+                               (map #(v2/sqr (v2/sub (state :energy) %))
+                                    (state :energy-history)))
+                       (/ 1.0 histsize))
+        sm 1.0
+        smoothv (v2/smooth oldv newv sm)]
+    (assoc state :variance smoothv)))
 
 
 (defn- beat-detect [state]
@@ -294,7 +307,6 @@
           (detect-kick t)
           (detect-snare t)
           (detect-hat t)))))
-
 
 
 (defn process []
