@@ -26,6 +26,10 @@
   [(/ (v1 0) (v2 0))
    (/ (v1 1) (v2 1))])
 
+
+(defn sqr [v]
+  [(* (v 0) (v 0)) (* (v 1) (v 1))])
+
 (defn sum-of-squares ^double [^doubles v]
   (+ (* (v 0) (v 0)) (* (v 1) (v 1))))
 
@@ -48,6 +52,8 @@
   (and (= (v1 0) (v2 0))
        (= (v2 1) (v2 1))))
 
+(defn smooth [oldv newv amount]
+  (add oldv (scale (sub newv oldv) amount)))
 
 
 (defn format [v]
